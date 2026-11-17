@@ -16,7 +16,10 @@
     document.write('<style>:root{color-scheme:light;box-sizing:border-box}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}' +
       /* Home-App: Leiste unten näher an den Rand, mit Abstand zum Home-Balken */
       '.tabbar{padding-bottom:calc(max(env(safe-area-inset-bottom,0px) - 20px, 6px) + 4px)!important}' +
-      ':root{--m-pb:calc(max(env(safe-area-inset-bottom,0px) - 20px, 0px) + 14px)}</style>');
+      ':root{--m-pb:calc(max(env(safe-area-inset-bottom,0px) - 20px, 0px) + 14px)}' +
+      '.gs-card{background:var(--tile);border-radius:14px;padding:0 14px}.gs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;font-weight:600;font-size:16px}.gs-row+.gs-row{border-top:1px solid var(--line)}.gs-row.dis{color:var(--muted)}' +
+      '.gs-sw{position:relative;width:51px;height:31px;border-radius:16px;background:color-mix(in srgb,var(--muted) 45%,transparent);flex-shrink:0;transition:background .2s}.gs-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}.gs-sw.on{background:var(--accent)}.gs-sw.on::after{transform:translateX(20px)}.gs-sw:disabled{opacity:.45}' +
+      '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}</style>');
     document.write('<link rel="manifest" href="manifest.webmanifest">' +
       '<meta name="apple-mobile-web-app-capable" content="yes">' +
       '<meta name="mobile-web-app-capable" content="yes">' +
@@ -378,7 +381,9 @@
     var b = ev.target.closest && ev.target.closest("[data-gpush]"); if(!b) return;
     ev.preventDefault(); ev.stopPropagation();
     var k = b.getAttribute("data-gpush");
-    if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
+    if(k === "pToggle"){ if(pushOn()) pushDisable(); else pushEnable(); }
+    else if(k === "wToggle"){ if(!pushOn()) return; try{ localStorage.setItem(WK, weighOn() ? "0" : "1"); }catch(_){} weighSync(true); rerender(); }
+    else if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
     else if(k === "wOn" || k === "wOff"){ try{ localStorage.setItem(WK, k === "wOn" ? "1" : "0"); }catch(_){} weighSync(true); rerender(); }
   }, true);
   /* Claude-Verbrauch im laufenden Monat (geschätzt aus den Tokens, die Anthropic bei jeder Antwort meldet) */
@@ -389,7 +394,7 @@
     if(!u) return "Verbrauch wird geladen …";
     if(u.off) return "Verbrauch noch nicht eingerichtet.";
     var eur = function(v){ return v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
-    return "Diesen Monat: " + u.n + (u.n === 1 ? " Anfrage" : " Anfragen") + " · ca. " + eur(u.cost) + " $ von " + eur(lim) + " $ · genauer Stand in der Anthropic Console";
+    return "Diesen Monat: " + u.n + (u.n === 1 ? " Anfrage" : " Anfragen") + " · ca. " + eur(u.cost) + " $ von " + eur(lim) + " $";
   }
   async function usageLoad(){
     var el = document.getElementById("gaUse"); if(!el || !sess) return;
@@ -438,8 +443,7 @@
   }, true);
   window.gymArcPush = { html: function(){
     var acc = '<div class="fv-l" style="margin-top:18px">Konto</div>' +
-      '<div class="st-bk"><button class="m-btn" data-gacc="pw">Passwort festlegen</button><button class="m-btn" data-gacc="out">Abmelden</button></div>' +
-      '<p class="st-hint">Angemeldet als ' + String((sess && sess.email) || "").replace(/</g, "&lt;") + '. Mit Passwort meldest du weitere Geräte ohne E-Mail an.</p>' +
+      '<div class="st-bk"><button class="m-btn" data-gacc="pw">Passwort</button><button class="m-btn" data-gacc="out">Abmelden</button></div>' +
       '<div class="fv-l" style="margin-top:18px">Claude</div><p class="st-hint" id="gaUse">' + usageText(usageCache()) + '</p>';
     setTimeout(usageLoad, 0);
     return acc + healthHTML() + pushHTML();
@@ -454,14 +458,12 @@
   }
   setTimeout(function(){ try{ if(sess && pushOn() && localStorage.getItem(WK + "-sync") !== "1") weighSync(false); }catch(_){} }, 4000);
   function pushHTML(){
-    var h = '<div class="fv-l" style="margin-top:18px">Mitteilungen</div>';
-    if(!pushSupported() || !installed()) return h + '<p class="st-hint">Meldung bei Pausenende gibt es nur in der App vom Home-Bildschirm (Safari → Teilen → Zum Home-Bildschirm).</p>';
-    if(Notification.permission === "denied") return h + '<p class="st-hint">Mitteilungen sind blockiert. Erlauben unter iPhone-Einstellungen → Mitteilungen → Gym Arc.</p>';
-    var on = pushOn();
-    return h + '<div class="st-seg"><button class="' + (on ? "on" : "") + '" data-gpush="on">An</button><button class="' + (on ? "" : "on") + '" data-gpush="off">Aus</button></div>' +
-      '<p class="st-hint" style="margin-top:-10px">Meldet sich, wenn die Satzpause vorbei ist.' + (on ? ' <a href="#" data-gpush="test" style="color:var(--accent);font-weight:600;text-decoration:none">Testen</a>' : '') + '</p>' +
-      (on ? '<div class="fv-l" style="margin-top:14px">Wiegen um 6:55</div><div class="st-seg"><button class="' + (weighOn() ? "on" : "") + '" data-gpush="wOn">An</button><button class="' + (weighOn() ? "" : "on") + '" data-gpush="wOff">Aus</button></div>' +
-        '<p class="st-hint" style="margin-top:-10px">Erinnert morgens ans Wiegen – nur wenn du noch nichts eingetragen hast.</p>' : '');
+    var h = '<div class="fv-l" style="margin-top:18px">Mitteilungen</div><div class="gs-card">';
+    if(!pushSupported() || !installed()) return h + '<div class="gs-row dis"><span>Nur in der App vom Home-Bildschirm</span></div></div>';
+    if(Notification.permission === "denied") return h + '<div class="gs-row dis"><span>In den iPhone-Einstellungen blockiert</span></div></div>';
+    var on = pushOn(), w = on && weighOn();
+    return h + '<div class="gs-row"><span>Satzpause vorbei' + (on ? ' <button class="gs-test" data-gpush="test">Testen</button>' : '') + '</span><button class="gs-sw' + (on ? " on" : "") + '" data-gpush="pToggle" role="switch" aria-checked="' + on + '" aria-label="Satzpause vorbei"></button></div>' +
+      '<div class="gs-row' + (on ? "" : " dis") + '"><span>Wiegen um 6:55</span><button class="gs-sw' + (w ? " on" : "") + '" data-gpush="wToggle" role="switch" aria-checked="' + w + '" aria-label="Wiegen um 6:55"' + (on ? "" : " disabled") + '></button></div></div>';
   }
 
   /* ---------- Fortschrittsfotos (privat in Supabase Storage) + Vergleich durch Claude ---------- */
@@ -641,8 +643,7 @@
   }, true);
   function healthHTML(){
     var D = HL.data && HL.data.days, last = D ? Object.keys(D).sort().pop() : null;
-    return '<div class="fv-l" style="margin-top:18px">Apple Health</div><button class="m-btn" data-gh="1" style="margin:0">' + (last ? "Kurzbefehl neu einrichten" : "Schritte & aktive Kalorien verbinden") + '</button>' +
-      '<p class="st-hint" style="margin-top:8px">' + (last ? "Zuletzt empfangen: " + deDate(last) + (D[last].steps != null ? " · " + Number(D[last].steps).toLocaleString("de-DE") + " Schritte" : "") + (D[last].active != null ? " · " + D[last].active + " kcal aktiv" : "") + "." : "Ein iPhone-Kurzbefehl schickt Schritte und aktive Kalorien aus Health. Dein Kalorienziel passt sich dann an Tage mit viel oder wenig Bewegung an.") + '</p>';
+    return '<div class="fv-l" style="margin-top:18px">Apple Health</div><button class="m-btn" data-gh="1" style="margin:0">' + (last ? "✓ Verbunden · neu einrichten" : "Schritte & aktive Kalorien verbinden") + '</button>';
   }
 
   window.claude = {

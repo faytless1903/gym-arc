@@ -1769,9 +1769,10 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
     <div class="section-t">Workouts</div>
     ${PLAN.workouts.map(w=>{
       const ld = lastWorkoutDate(w.id);
-      return `<button class="w-card ${w.id===nextW.id?"next":""}" data-act="preview" data-w="${w.id}">
+      const runW = S.active && S.active.workoutId; const hl = runW ? w.id===runW : w.id===nextW.id;
+      return `<button class="w-card ${hl?"next":""}" data-act="preview" data-w="${w.id}">
         <div class="w-badge" style="--wb:${wColor(w)}">${wIcon(w)}</div>
-        <div><div class="w-name">${w.name}${w.id===nextW.id?`<span class="nx">Als Nächstes</span>`:""}</div>
+        <div><div class="w-name">${w.name}${hl?`<span class="nx">${runW?"Läuft":"Als Nächstes"}</span>`:""}</div>
         <div class="w-meta">${w.exercises.length} Übungen, ${totalSets(w)} Sätze</div>
         <div class="w-last">${ld? "Zuletzt "+relDay(ld).replace(/^(Heute|Gestern)$/,m=>m.toLowerCase())+(S.history.find(x=>x.workoutId===w.id).score? ", "+S.history.find(x=>x.workoutId===w.id).score.score+" %":"") : "Noch nicht trainiert"}</div></div>
         <span class="chev">›</span></button>`;
@@ -5865,11 +5866,10 @@ function settingsModal(){
     <div class="st-sw">${Object.entries(THEME_ACC).map(([k,a])=>`<button class="${t.acc===k?"on":""}" data-act="thAcc" data-k="${k}"><i style="background:${a[1]}"></i>${a[0]}</button>`).join("")}</div>
     <div class="fv-l" style="margin-top:18px">Trainingstage</div>
     <div class="st-days">${[[1,"Mo"],[2,"Di"],[3,"Mi"],[4,"Do"],[5,"Fr"],[6,"Sa"],[0,"So"]].map(([d,l])=>`<button class="${PLAN.days.includes(d)?"on":""}" data-act="stDay" data-d="${d}" aria-label="${WEEKDAYS[d]}">${l}</button>`).join("")}</div>
-    <p class="st-hint">Die Tage, an denen du trainierst. Sie bestimmen den Plan auf der Startseite.</p>
     ${(window.gymArcPush && window.gymArcPush.html()) || ""}
     <div class="fv-l" style="margin-top:18px">Daten</div>
     <div class="st-bk"><button class="m-btn" data-act="bkExport">↑ Exportieren</button><button class="m-btn" data-act="bkImport">↓ Importieren</button></div>
-    <p class="st-hint">Enthält: ${bkCounts()}, dazu Ziele, Plan, Einstellungen und Darstellung.</p>`);
+`);
 }
 function themeSet(p){ const t=Object.assign(themeGet(), p); try{ localStorage.setItem("pp-theme", JSON.stringify(t)); }catch(e){} applyTheme(); settingsModal(); }
 function renderAll(){

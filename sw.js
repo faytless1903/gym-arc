@@ -1,6 +1,6 @@
 /* Gym Arc – Offline-Modus + Mitteilungen bei Pausenende */
-const C = "gym-arc-v3";
-const SHELL = ["./", "index.html", "standalone.js", "config.js", "manifest.webmanifest", "icon-180.png", "icon-192.png"];
+const C = "gym-arc-v4";
+const SHELL = ["./", "index.html", "standalone.js", "config.js", "manifest.webmanifest", "icon-180.png?v=2", "icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {

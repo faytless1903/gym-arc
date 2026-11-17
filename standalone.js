@@ -377,6 +377,30 @@
     var k = b.getAttribute("data-gpush");
     if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
   }, true);
+  /* Claude-Verbrauch im laufenden Monat (geschätzt aus den Tokens, die Anthropic bei jeder Antwort meldet) */
+  var UK = "ga-usage";
+  function usageCache(){ try{ return JSON.parse(localStorage.getItem(UK) || "null"); }catch(_){ return null; } }
+  function usageText(u){
+    var lim = +CFG.monthlyLimit || 5;
+    if(!u) return "Verbrauch wird geladen …";
+    if(u.off) return "Verbrauch noch nicht eingerichtet.";
+    var eur = function(v){ return v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    return "Diesen Monat: " + u.n + (u.n === 1 ? " Anfrage" : " Anfragen") + " · ca. " + eur(u.cost) + " $ von " + eur(lim) + " $ · genauer Stand in der Anthropic Console";
+  }
+  async function usageLoad(){
+    var el = document.getElementById("gaUse"); if(!el || !sess) return;
+    try{
+      var d = new Date(), start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+      var t = await token(), r = await fetch(BASE + "/rest/v1/claude_usage?select=cost_usd&created_at=gte." + encodeURIComponent(start),
+        { headers: { apikey: KEY, Authorization: "Bearer " + t }, cache: "no-store" });
+      var u;
+      if(r.status === 404 || r.status === 400){ u = { off: true }; }
+      else if(!r.ok) return;
+      else { var rows = await r.json(); u = { n: rows.length, cost: rows.reduce(function(a, x){ return a + (+x.cost_usd || 0); }, 0) }; }
+      try{ localStorage.setItem(UK, JSON.stringify(u)); }catch(_){}
+      el = document.getElementById("gaUse"); if(el) el.textContent = usageText(u);
+    }catch(_){}
+  }
   function showPwSet(){
     box('<h2>Passwort festlegen</h2><p>Damit meldest du dich auf weiteren Geräten ohne E-Mail an (' + String((sess && sess.email) || "").replace(/</g, "&lt;") + ').</p>' +
       '<input id="gaNew" type="password" autocomplete="new-password" data-native placeholder="Neues Passwort (mind. 8 Zeichen)">' +
@@ -411,7 +435,9 @@
   window.gymArcPush = { html: function(){
     var acc = '<div class="fv-l" style="margin-top:18px">Konto</div>' +
       '<div class="st-bk"><button class="m-btn" data-gacc="pw">Passwort festlegen</button><button class="m-btn" data-gacc="out">Abmelden</button></div>' +
-      '<p class="st-hint">Angemeldet als ' + String((sess && sess.email) || "").replace(/</g, "&lt;") + '. Mit Passwort meldest du weitere Geräte ohne E-Mail an.</p>';
+      '<p class="st-hint">Angemeldet als ' + String((sess && sess.email) || "").replace(/</g, "&lt;") + '. Mit Passwort meldest du weitere Geräte ohne E-Mail an.</p>' +
+      '<div class="fv-l" style="margin-top:18px">Claude</div><p class="st-hint" id="gaUse">' + usageText(usageCache()) + '</p>';
+    setTimeout(usageLoad, 0);
     return acc + pushHTML();
   } };
   function pushHTML(){

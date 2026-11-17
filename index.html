@@ -618,7 +618,7 @@ body.rd-on .resume{opacity:0;transform:translateX(-50%) scale(.96);pointer-event
 .vd-sub{font-size:13px;font-weight:650;color:var(--muted);margin:4px 0 6px}
 .vd-empty{color:var(--muted);font-size:14px;padding:12px 0}
 .vd-note{font-size:12px;color:var(--muted);margin:4px 0 6px}
-.modal-box{max-height:calc(100dvh - 40px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.modal-box{max-height:calc(100dvh - var(--safe-t) - 14px - var(--m-pb, calc(var(--safe-b) + 14px)));overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 html,body{overflow-x:clip}
 .vr-h{display:flex;justify-content:space-between;font-size:14px;font-weight:600}
 .vr-h b{font-variant-numeric:tabular-nums}
@@ -811,7 +811,7 @@ html,body{overflow-x:clip}
 .presets button.on{background:var(--accent);color:#fff}
 
 /* ---------- Modal ---------- */
-.modal{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;z-index:40;background:var(--scrim);padding:14px 14px calc(var(--safe-b) + 14px)}
+.modal{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;z-index:40;background:var(--scrim);padding:calc(var(--safe-t) + 14px) 14px var(--m-pb, calc(var(--safe-b) + 14px))}
 .modal{display:flex;visibility:hidden;pointer-events:none;background:transparent;transition:background .22s ease,visibility 0s linear .26s}
 .modal.open{visibility:visible;pointer-events:auto;background:var(--scrim);transition:background .22s ease}
 .modal .modal-box{transform:translateY(28px);opacity:0;transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s ease}

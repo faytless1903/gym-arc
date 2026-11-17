@@ -137,7 +137,7 @@
 
   /* ---------- Claude über die eigene Server-Funktion (Schlüssel bleibt bei Supabase) ---------- */
   async function shrink(b){
-    try{ var bmp = await createImageBitmap(b); var sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    try{ var bmp = await createImageBitmap(b); var sc = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));   // 1024 px reichen für Mahlzeiten und Tabellen und sparen ca. 30–40 % Tokens
       var c = document.createElement("canvas"); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
       c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
       return await new Promise(function(res){ c.toBlob(function(x){ res(x || b); }, "image/jpeg", .85); });
@@ -145,7 +145,7 @@
   }
   async function b64(blob){
     var b = blob;
-    if(b.size > 1200000 || !/^image\/(jpeg|png|webp|gif)$/.test(b.type || "")) b = await shrink(b);
+    b = await shrink(b);   // immer auf max. 1024 px verkleinern
     var buf = new Uint8Array(await b.arrayBuffer()), s = "";
     for(var i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
     return { media_type: /^image\/(jpeg|png|webp|gif)$/.test(b.type || "") ? b.type : "image/jpeg", data: btoa(s) };

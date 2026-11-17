@@ -17,8 +17,8 @@
     document.write('<link rel="manifest" href="manifest.webmanifest">' +
       '<meta name="apple-mobile-web-app-capable" content="yes">' +
       '<meta name="mobile-web-app-capable" content="yes">' +
-      '<meta name="apple-mobile-web-app-title" content="Gym Arc">' +
-      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">');
+      '<meta name="apple-mobile-web-app-title" content="Gym Arc">');
+    // Statusleiste bewusst NICHT durchsichtig: sonst rutschen Training/Einkauf unter die Uhrzeit
   }catch(_){}
   if("serviceWorker" in navigator && location.protocol === "https:"){
     window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });

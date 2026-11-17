@@ -1,5 +1,5 @@
 /* Gym Arc – Offline-Modus + Mitteilungen bei Pausenende */
-const C = "gym-arc-v5";
+const C = "gym-arc-v6";
 const SHELL = ["./", "index.html", "standalone.js", "config.js", "manifest.webmanifest", "icon-180.png?v=2", "icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -8,7 +8,9 @@ self.addEventListener("fetch", e => {
   const u = new URL(r.url);
   const font = /fonts\.(googleapis|gstatic)\.com$/.test(u.hostname);
   if (u.origin !== location.origin && !font) return;   // Supabase/Claude nie zwischenspeichern
-  e.respondWith(fetch(r).then(res => { if (res.ok) { const cp = res.clone(); caches.open(C).then(c => c.put(r, cp)); } return res; })
+  // immer beim Server nachfragen (no-cache), damit neue Versionen sofort ankommen statt bis zu 10 Min. später
+  const fresh = u.origin === location.origin ? fetch(u.href, { cache: "no-cache", credentials: "same-origin" }) : fetch(r);
+  e.respondWith(fresh.then(res => { if (res.ok) { const cp = res.clone(); caches.open(C).then(c => c.put(r, cp)); } return res; })
     .catch(() => caches.match(r, { ignoreSearch: true }).then(m => m || (r.mode === "navigate" ? caches.match("index.html") : Response.error()))));
 });
 self.addEventListener("push", e => {

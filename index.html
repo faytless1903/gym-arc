@@ -6008,7 +6008,11 @@ function settingsModal(){
     <div class="st-bk"><button class="m-btn" data-act="bkExport">↑ Exportieren</button><button class="m-btn" data-act="bkImport">↓ Importieren</button></div>
 `);
 }
-function themeSet(p){ const t=Object.assign(themeGet(), p); try{ localStorage.setItem("pp-theme", JSON.stringify(t)); }catch(e){} applyTheme(); settingsModal(); }
+// Farbe/Darstellung: Fenster bleibt stehen (kein Neuaufbau, kein Springen), nur die Auswahl und die Seite dahinter werden aktualisiert
+function themeSet(p){ const t=Object.assign(themeGet(), p); try{ localStorage.setItem("pp-theme", JSON.stringify(t)); }catch(e){} applyTheme();
+  document.querySelectorAll('[data-act=thMode]').forEach(b=>b.classList.toggle("on", b.dataset.k===t.mode));
+  document.querySelectorAll('[data-act=thAcc]').forEach(b=>b.classList.toggle("on", b.dataset.k===t.acc));
+  try{ keepScrollHome(renderHome); }catch(_){ } }
 function renderAll(){
   if(!(UI.tab==="library" && document.activeElement && document.activeElement.id==="libQ")) keepScrollHome(renderHome);
   bgRender();

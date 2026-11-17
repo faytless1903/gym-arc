@@ -13,7 +13,9 @@
   /* ---------- Web-App: Manifest, Symbol, Offline ---------- */
   try{
     // Grundgerüst wie in der Artifact-Umgebung (Abstand zur Statusleiste usw.), damit alles genauso aussieht
-    document.write('<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>');
+    document.write('<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}' +
+      /* Home-App: Leiste unten näher an den Rand, mit Abstand zum Home-Balken */
+      '.tabbar{padding-bottom:calc(max(env(safe-area-inset-bottom,0px) - 14px, 8px) + 6px)!important}</style>');
     document.write('<link rel="manifest" href="manifest.webmanifest">' +
       '<meta name="apple-mobile-web-app-capable" content="yes">' +
       '<meta name="mobile-web-app-capable" content="yes">' +

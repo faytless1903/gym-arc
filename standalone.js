@@ -349,24 +349,12 @@
     toast2("Mitteilungen aus"); rerender();
   }
   async function pushTest(){
-    try{ await callFn("push", { action: "schedule", at: Date.now() + 10000, title: "Schräge Brustpresse", body: "50 kg · 8 Wdh · Satz 2 – Pause vorbei" });
+    try{ await callFn("push", { action: "schedule", at: Date.now() + 10000, title: "Satzpause vorbei", body: "" });
       lastEnd = "test"; testUntil = Date.now() + 15000; toast2("Test kommt in 10 Sekunden – jetzt iPhone sperren"); }
     catch(e){ toast2("Test fehlgeschlagen: " + (e.message || e.code)); }
   }
-  /* Text wie im Hinweis „Pause vorbei“ der App: nächste Übung, Gewicht, Wiederholungen, Satz */
-  function restMsg(){
-    try{
-      var a = S.active, w = W(a.workoutId), id = UI.ex || UI.lastEx, x = id && a.ex[id], e = id && w.exercises.find(function(o){ return o.id === id; });
-      var kg = function(s){ var v = num(s.kg); return fmtNum(v == null ? 0 : v); };
-      if(x && e){
-        var i = x.sets.findIndex(function(s){ return !s.done; });
-        if(i >= 0){ var s = x.sets[i]; return { title: e.name, body: kg(s) + " kg · " + (s.reps != null ? s.reps : e.reps) + " Wdh · Satz " + (i + 1) + " – Pause vorbei" }; }
-        var n = nextOpen(w, id);
-        if(n){ var s2 = a.ex[n.id].sets[0]; return { title: n.name, body: kg(s2) + " kg · " + (s2.reps != null ? s2.reps : n.reps) + " Wdh · nächste Übung – Pause vorbei" }; }
-      }
-    }catch(_){}
-    return { title: "Pause vorbei", body: "Weiter geht's mit dem nächsten Satz" };
-  }
+  /* Text der Mitteilung bei Pausenende */
+  function restMsg(){ return { title: "Satzpause vorbei", body: "" }; }
   var lastEnd, cancelledFor = null, testUntil = 0;
   setInterval(function(){
     if(!pushOn() || !sess) return;

@@ -829,8 +829,8 @@ html,body{overflow-x:clip}
 @keyframes mSwap{from{opacity:.35;transform:translateY(8px)}to{opacity:1;transform:none}}
 body.m-lock{overflow:hidden}
 /* Tabs & Unterreiter: sanft einblenden statt hart umschalten */
-.v-in{animation:vIn .2s ease both}
-@keyframes vIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.v-in{animation:vIn .18s cubic-bezier(.2,.8,.2,1) both}
+@keyframes vIn{from{opacity:0}to{opacity:1}}
 /* Tipp-Feedback */
 .m-btn,.pill-btn,.w-card,.ck-card,.sx-it,.sh-it,.hist-item,.fd-meal,.ml-it,.stg-row,.sp-cat,.rr-row,.ck-shop,.tab,.nu-opt,.rc-apply,.start-btn,.finish-btn,.next-btn{transition:transform .12s ease,opacity .12s ease}
 .m-btn:active,.pill-btn:active,.w-card:active,.ck-card:active,.hist-item:active,.fd-meal:active,.ml-it:active,.stg-row:active,.sp-cat:active,.rr-row:active,.ck-shop:active,.nu-opt:active,.rc-apply:active,.start-btn:active,.finish-btn:active,.next-btn:active{transform:scale(.975)}
@@ -1689,10 +1689,12 @@ const UI = { tab:"train", preview:null, workoutOpen:false, ex:null, timerOpen:fa
 
 /* ================= Home ================= */
 function nameSync(){ const P={}; PLAN.workouts.forEach(w=>w.exercises.forEach(e=>P[e.id]=e.name)); (S.history||[]).forEach(h=>(h.exercises||[]).forEach(e=>{ if(P[e.exId] && e.name!==P[e.exId]) e.name=P[e.exId]; })); }
-function renderHome(){ try{ nameSync(); }catch(_){}
+// Tabwechsel: neue Seite im selben Frame einblenden (vorher blitzte sie erst voll auf und blendete dann nochmal ein)
+function renderHome(){ renderHomeInner(); if(renderHome._anim){ renderHome._anim=false; const c=$("home").firstElementChild; if(c){ c.classList.remove("v-in"); void c.offsetWidth; c.classList.add("v-in"); } } }
+function renderHomeInner(){ try{ nameSync(); }catch(_){}
   const el = $("home");
   const view = UI.tab+"|"+(UI.tab==="nutrition"?UI.nuTab:"");
-  if(view!==renderHome.last){ renderHome.last=view; setTimeout(()=>{ const c=el.firstElementChild; if(c){ c.classList.remove("v-in"); void c.offsetWidth; c.classList.add("v-in"); } },0); }
+  if(view!==renderHome.last){ renderHome.last=view; renderHome._anim=true; }
   document.body.classList.toggle("noscroll", UI.tab==="train");
   { const g=document.querySelector(".gear"); if(g) g.style.display = UI.tab==="train" ? "" : "none"; }
   document.body.classList.toggle("has-resume", !!S.active);

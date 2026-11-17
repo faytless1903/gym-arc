@@ -4000,7 +4000,7 @@ async function recLabRead(files){
   const one=async f=>{ let blob; try{ blob=await nuShrink(f); }catch(_){ return null; }
     // 1. Versuch schnell; bei Fehler/Limit/„nicht erkannt“ 2. Versuch gründlicher
     for(let k=0;k<3;k++){ try{
-        const a = await sampleJSON(sample, RECPHOTO_PROMPT, {images:[blob], modelTier: k===0?"quick":"default"}, k===0?25000:40000);
+        const a = await sampleJSON(sample, RECPHOTO_PROMPT, {images:[blob], modelTier:"default"}, 40000);
         const r=parse(a); if(r) return r; if(k>=1) return null;
       }catch(e){ if(e&&e.code==="not_granted") return null; await wait(e&&e.code==="rate_limited" ? 2500*(k+1) : 600); } }
     return null; };
@@ -4347,7 +4347,7 @@ ${r.extra?`Aktuelle Beilage pro Portion: ${r.extra.name} (${r.extra.kcal} kcal, 
 Bisheriger Austausch: ${JSON.stringify((r.chat||[]).slice(-8,-1).map(m=>(m.u?"Nutzer: ":"Claude: ")+m.t))}
 Neue Nachricht des Nutzers: "${msg}"
 Aufgaben: Beantworte kurz (max. 2 Sätze, Deutsch, konkrete Zahlen). Nennt der Nutzer etwas, das er zu JEDER Portion isst (Beilage wie Reis, Brot, Nudeln), berechne es mit Standard-Nährwerttabellen (rohe Mengen roh, gekochte gekocht; fehlt die Menge, nimm eine übliche Portion und nenne sie). Beschreibt er die Größe seiner Portion genauer, berechne, wie viele solcher Portionen das ganze Rezept ergibt.
-Antworte NUR mit JSON: {"antwort":"…","beilage":{"name":"kurzer Name","gramm":Zahl,"zubereitung":"…","suche":["Begriffe wie im Bundeslebensmittelschlüssel"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl} oder null wenn keine Änderung,"beilage_entfernen":true/false,"portionen":Zahl oder null}`, {modelTier:"default", cache:false});
+Antworte NUR mit JSON: {"antwort":"…","beilage":{"name":"kurzer Name","gramm":Zahl,"zubereitung":"…","suche":["Begriffe wie im Bundeslebensmittelschlüssel"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl} oder null wenn keine Änderung,"beilage_entfernen":true/false,"portionen":Zahl oder null}`, {modelTier:"quick", cache:false});
     const notes=[];
     if(res && res.beilage_entfernen){ delete r.extra; notes.push("Beilage entfernt"); }
     const b=res && res.beilage; if(b && b.name){ const [c]=await blsResolve(sample, [b]); const v=compVals(c);
@@ -4408,7 +4408,7 @@ async function recHowAi(id){
   const sample=await getSample(); if(!sample){ toast("Claude ist hier nicht verfügbar"); return; }
   const btn=document.querySelector("[data-act=recHowAi]"); if(btn){ btn.disabled=true; btn.textContent="Claude schreibt die Schritte …"; }
   try{
-    const res=await sample.json(`Schreibe eine kurze, klare Zubereitungsanleitung für "${r.name}" (${r.servings} Portionen) mit genau diesen Zutaten:\n${r.ingredients}\nNummerierte Schritte, je 1 Satz, mit Zeiten und Temperaturen wo sinnvoll, max. 10 Schritte. Antworte NUR mit JSON: {"schritte":["..."]}`, {modelTier:"default"});
+    const res=await sample.json(`Schreibe eine kurze, klare Zubereitungsanleitung für "${r.name}" (${r.servings} Portionen) mit genau diesen Zutaten:\n${r.ingredients}\nNummerierte Schritte, je 1 Satz, mit Zeiten und Temperaturen wo sinnvoll, max. 10 Schritte. Antworte NUR mit JSON: {"schritte":["..."]}`, {modelTier:"quick"});
     const s=(res&&Array.isArray(res.schritte)?res.schritte:[]).map(x=>String(x).trim()).filter(Boolean);
     if(!s.length) throw 0;
     if(ta){ ta.value=s.join("\n"); } else { r.howto={url, text:s.join("\n")}; saveNutri(); recHowView(id); return; }
@@ -4608,7 +4608,7 @@ ${r.ingredients}
 Gib 3–5 konkrete, alltagstaugliche Änderungen mit exakten Mengen (z. B. „200 ml Sahne 30 % → 200 ml Kochsahne 15 %“, „Penne 600 g → 450 g, dafür 300 g Brokkoli“) und die Ersparnis pro Portion. Rechne mit Standard-Nährwerten.
 Antworte NUR mit JSON: {"fazit":"1 Satz, wo die meisten Kalorien stecken","tipps":[{"was":"konkrete Änderung","warum":"kurz, max. 80 Zeichen","kcal":Ersparnis pro Portion als Zahl}],"neu":{"kcal":pro Portion,"p":g,"c":g,"f":g},"zutaten_neu":"komplette neue Zutatenliste, eine Zutat pro Zeile"}`;
   try{
-    const t=await sample.json(prompt,{modelTier:"default"});
+    const t=await sample.json(prompt,{modelTier:"quick"});
     if(!t || !Array.isArray(t.tipps) || !t.tipps.length) throw 0;
     const clean={fazit:String(t.fazit||"").slice(0,200), tipps:t.tipps.slice(0,6).map(x=>({was:String(x.was||"").slice(0,140), warum:String(x.warum||"").slice(0,120), kcal:Math.max(0,Math.round(+x.kcal||0))})),
       neu: t.neu && isFinite(+t.neu.kcal) ? {kcal:Math.round(+t.neu.kcal), p:Math.round(+t.neu.p||0), c:Math.round(+t.neu.c||0), f:Math.round(+t.neu.f||0)} : null,
@@ -4674,7 +4674,7 @@ const RECPHOTO_PROMPT=`Was zeigt das Foto?
 A) Eine Nährwerttabelle / Verpackung mit Nährwertangaben: lies die Werte EXAKT ab. Antworte NUR mit JSON: {"typ":"etikett","name":"Produktname kurz, deutsch","pro100":{"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}} (Werte je 100 g bzw. 100 ml).
 B) Ein Rezept, eine Zutatenliste oder ein Screenshot davon: lies die Zutaten mit Mengen exakt ab, eine pro Eintrag, Mengen möglichst in g/ml (z. B. "800 g Hähnchenbrust"). Antworte NUR mit JSON: {"typ":"rezept","name":"Gericht" oder null,"portionen":Zahl oder null,"zutaten":["..."]}.
 Sonst: {"typ":"nichts"}.`;
-const labelRead=(sample, blob)=>sampleJSON(sample, LABEL_PROMPT, {images:[blob], modelTier:"quick"}, 25000);
+const labelRead=(sample, blob)=>sampleJSON(sample, LABEL_PROMPT, {images:[blob], modelTier:"default"}, 40000);
 let photoRun=0;
 /* Foto gewählt -> erst fragen, was drauf ist (optional), dann analysieren */
 async function foodPhotoAnalyze(file){

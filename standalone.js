@@ -641,9 +641,15 @@
     var el = document.getElementById(b.getAttribute("data-ghc")); if(!el) return;
     try{ navigator.clipboard.writeText(el.textContent).then(function(){ toast2("Kopiert"); }); }catch(_){ toast2("Bitte lange drücken und kopieren"); }
   }, true);
+  // Zustand merken, damit „Verbunden“ sofort angezeigt wird, auch bevor die Daten geladen sind
+  function hlKnown(){ try{ return localStorage.getItem("ga-health-ok") === "1"; }catch(_){ return false; } }
+  function hlLabel(ok){ if(ok === undefined){ var D = HL.data && HL.data.days; ok = D ? Object.keys(D).length > 0 : hlKnown(); }
+    try{ if(HL.data) localStorage.setItem("ga-health-ok", ok ? "1" : "0"); }catch(_){}
+    return ok ? "✓ Verbunden · neu einrichten" : "Schritte & aktive Kalorien verbinden"; }
   function healthHTML(){
-    var D = HL.data && HL.data.days, last = D ? Object.keys(D).sort().pop() : null;
-    return '<div class="fv-l" style="margin-top:18px">Apple Health</div><button class="m-btn" data-gh="1" style="margin:0">' + (last ? "✓ Verbunden · neu einrichten" : "Schritte & aktive Kalorien verbinden") + '</button>';
+    var D = HL.data && HL.data.days, ok = D ? Object.keys(D).length > 0 : hlKnown();
+    if(!HL.data) hlLoad(true).then(function(){ var b = document.getElementById("gaHlBtn"); if(b) b.textContent = hlLabel(); });
+    return '<div class="fv-l" style="margin-top:18px">Apple Health</div><button class="m-btn" id="gaHlBtn" data-gh="1" style="margin:0">' + hlLabel(ok) + '</button>';
   }
 
   window.claude = {

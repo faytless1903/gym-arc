@@ -253,6 +253,15 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .rv-star{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--tile);color:var(--muted);font-size:22px;line-height:1;margin-top:2px}
 .rv-star.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--tile))}
 .ck-fav{font-style:normal;color:var(--accent);font-size:.85em}
+#bcScan{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);display:flex;align-items:flex-end;justify-content:center;padding:calc(var(--safe-t) + 14px) 14px var(--m-pb, calc(var(--safe-b) + 14px))}
+#bcScan .bc-box{background:var(--surface);border-radius:26px;padding:18px 18px 16px;width:100%;max-width:492px}
+#bcScan .bc-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}#bcScan .bc-h b{font-size:22px;font-weight:800}
+#bcScan .bc-x{width:38px;height:38px;border-radius:50%;background:var(--tile);color:var(--ink);font-size:16px}
+#bcScan .bc-cam{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}
+#bcScan video{width:100%;height:100%;object-fit:cover;display:block}
+#bcScan .bc-line{position:absolute;z-index:2;left:10%;right:10%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30}
+#bcScan .bc-msg{color:var(--muted);font-size:14px;margin:10px 2px}
+#bcScan .bc-man{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#bcScan .bc-man input{width:100%;min-width:0;box-sizing:border-box;border:0;border-radius:14px;background:var(--tile);color:var(--ink);padding:0 14px;font:inherit;font-size:16px;min-height:52px}#bcScan .bc-man .m-btn{margin:0;padding:0 18px;width:auto}
 .fe-save2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.fe-save2 .m-btn{margin:0}
 
 .ck-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warm);vertical-align:middle;margin-left:4px}
@@ -3967,7 +3976,7 @@ function recLabBox(R){ const L=R.lab||[];
     ${L.length?`<div class="cp-list" style="margin-bottom:8px">${L.map((c,i)=>`<div class="cp-r"><div class="cp-t"><textarea class="cp-n" id="re_ln_${i}" rows="1" aria-label="Name der Zutat" enterkeyhint="done">${esc(c.name)}</textarea><span>${c.bn?"BLS · ":c.est?"geschätzt · ":""}je 100 g: ${Math.round(c.k100.kcal)} kcal · E ${r1(c.k100.p)}</span></div><label class="cp-g"><input id="re_lg_${i}" inputmode="decimal" value="${c.g>0?r1(c.g):""}" placeholder="0" aria-label="Gramm ${esc(c.name)}"><em>g</em></label><em class="cp-k" id="rlk_${i}">${r1(compVals(c).kcal)}</em><button class="cp-x" data-act="recLabDel" data-i="${i}" aria-label="Entfernen">✕</button></div>`).join("")}</div>`:""}
     ${R.labFail&&R.labFail.length?`<button class="m-btn" data-act="recLabRetry" style="margin:0 0 6px;color:var(--red)">↻ ${R.labFail.length} nicht gelesene${R.labFail.length>1?"":"s"} Foto${R.labFail.length>1?"s":""} nochmal lesen</button>`:""}
     ${1?`<label class="nu-f" style="margin-bottom:8px"><span>Zutat hinzufügen</span><div><input id="re_add" placeholder="${R.isKan?"z. B. 120 g Leberkäse, 150 g Pommes":R.isFav?"z. B. 35 g Espresso, 140 g Milch":"z. B. 500 g Hähnchen, 200 g Reis"}" autocomplete="off" enterkeyhint="done" autocapitalize="sentences" style="font-size:18px"></div></label>`:""}
-    <label class="m-btn" style="text-align:center;margin:0 0 6px">📷 Fotos: Rezept oder Nährwerttabellen<input type="file" id="recLabPhoto" accept="image/*" multiple style="display:none"></label>
+    <div class="fe-save2" style="margin:0 0 6px"><label class="m-btn" style="text-align:center">📷 Foto${R.isFav||R.isKan?"":"s"}<input type="file" id="recLabPhoto" accept="image/*" multiple style="display:none"></label><button class="m-btn" data-act="bcScan" data-to="rec"><svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 5v14M19 5v14" stroke="currentColor" stroke-width="1" fill="none"/></svg>Barcode</button></div>
     <div style="height:8px"></div>`;
 }
 const Z4={kcal:0,p:0,c:0,f:0};
@@ -4134,7 +4143,7 @@ function favRender(msg){
       ${favSeg("prod", E.id)}
       ${msg?`<p class="nu-hint ${/nicht|fehl/.test(msg)?"warn":""}">${esc(msg)}</p>`:""}
       <label class="nu-f" style="margin-bottom:10px"><span>Produkt</span><div><input id="fp_name" value="${esc(E.name||"")}" style="font-size:18px"></div></label>
-      <label class="m-btn" style="text-align:center;margin:0 0 12px">📷 Nährwerttabelle fotografieren<input type="file" id="favLabPhoto" accept="image/*" style="display:none"></label>
+      <div class="fe-save2" style="margin:0 0 12px"><label class="m-btn" style="text-align:center">📷 Tabelle<input type="file" id="favLabPhoto" accept="image/*" style="display:none"></label><button class="m-btn" data-act="bcScan" data-to="fav"><svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 5v14M19 5v14" stroke="currentColor" stroke-width="1" fill="none"/></svg>Barcode</button></div>
       <div class="re-sum">${sumRow(E.labelPortion?"Pro Portion (Tabelle)":"Pro Portion", E.old)}</div>
       <p class="nu-hint" style="margin:-4px 0 12px">${E.labelPortion?"✓ Pro Portion laut Nährwerttabelle.":"Noch ohne Nährwerttabelle."} <button class="link sm" data-act="favShow100" style="padding:0;display:inline">Werte je 100 g eintragen</button></p>
       ${favDailyHTML(E.daily)}
@@ -4144,7 +4153,7 @@ function favRender(msg){
     ${favSeg("prod", E.id)}
     ${msg?`<p class="nu-hint ${/nicht|fehl/.test(msg)?"warn":""}">${esc(msg)}</p>`:""}
     <label class="nu-f" style="margin-bottom:10px"><span>Produkt</span><div><input id="fp_name" value="${esc(E.name||"")}" placeholder="z. B. ja! Back-Camembert" style="font-size:18px"></div></label>
-    <label class="m-btn" style="text-align:center;margin:0 0 12px">📷 Nährwerttabelle fotografieren<input type="file" id="favLabPhoto" accept="image/*" style="display:none"></label>
+    <div class="fe-save2" style="margin:0 0 12px"><label class="m-btn" style="text-align:center">📷 Tabelle<input type="file" id="favLabPhoto" accept="image/*" style="display:none"></label><button class="m-btn" data-act="bcScan" data-to="fav"><svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 5v14M19 5v14" stroke="currentColor" stroke-width="1" fill="none"/></svg>Barcode</button></div>
     ${!E.p100 && E.old ? `<p class="nu-hint" style="margin:0 0 10px">Bisher ohne Nährwerttabelle gespeichert (${fmtNum(E.old.kcal)} kcal pro Portion). Fotografiere die Tabelle oder trag die Werte je 100 g ein.</p>`:""}
     <div class="fv-l">Nährwerte je 100 g</div>
     <div class="nu-grid">${fld("kcal","Kalorien","kcal")}${fld("p","Eiweiß","g")}${fld("c","Kohlenhydrate","g")}${fld("f","Fett","g")}</div>
@@ -4157,6 +4166,131 @@ function favRender(msg){
     <button class="m-btn pri" data-act="favSave">Favorit speichern</button>
     ${E.id?`<button class="m-btn red" data-act="favDel">Favorit löschen</button>`:""}`);
 }
+/* ---------- Barcode-Scanner (EAN-13 / EAN-8 / UPC-A) + Open Food Facts ----------
+   Läuft komplett im Browser, verbraucht keine Claude-Tokens. Nährwerte kommen kostenlos von Open Food Facts. */
+const EAN_L=["3211","2221","2122","1411","1132","1231","1114","1312","1213","3112"].map(s=>s.split("").map(Number));
+const EAN_G=EAN_L.map(w=>w.slice().reverse());
+const EAN_FIRST=["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+function eanCheck(d){ const n=d.length; let s=0; for(let i=0;i<n-1;i++){ const w=((n-1-i)%2===1)?3:1; s+=d[i]*w; } return (10-s%10)%10===d[n-1]; }
+function eanDigit(runs, i, unit){ // 4 Läufe → Ziffer + Typ (L/G) mit Abweichung
+  const w=[runs[i],runs[i+1],runs[i+2],runs[i+3]]; const sum=w[0]+w[1]+w[2]+w[3]; if(Math.abs(sum/unit-7)>1.6) return null;
+  const nw=w.map(x=>x*7/sum); let best=null;
+  for(let d=0;d<10;d++){ for(const [t,P] of [["L",EAN_L[d]],["G",EAN_G[d]]]){ let e=0; for(let k=0;k<4;k++) e+=Math.abs(nw[k]-P[k]); if(!best||e<best.e) best={d,t,e}; } }
+  return best && best.e<1.7 ? best : null;
+}
+function eanFromRuns(runs){ // runs[0] = helle Fläche, danach abwechselnd Strich/Lücke
+  const out=[];
+  for(let s=1;s+2<runs.length;s+=2){
+    for(const len of [59,43]){ if(s+len>runs.length) continue;
+      let tot=0; for(let k=0;k<len;k++) tot+=runs[s+k]; const unit=tot/(len===59?95:67);
+      if(runs[s-1]/unit<3) continue; // Ruhezone links vom Code
+      const g=(a,n)=>{ for(let k=0;k<n;k++){ const r=runs[a+k]/unit; if(r<0.4||r>1.8) return false; } return true; };
+      const half=len===59?6:4, mid=s+3+half*4;
+      if(!g(s,3)||!g(mid,5)||!g(s+len-3,3)) continue;
+      const digs=[], par=[]; let ok=true;
+      for(let k=0;k<half&&ok;k++){ const r=eanDigit(runs, s+3+k*4, unit); if(!r) ok=false; else { digs.push(r.d); par.push(r.t); } }
+      for(let k=0;k<half&&ok;k++){ const r=eanDigit(runs, mid+5+k*4, unit); if(!r||r.t!=="L") ok=false; else digs.push(r.d); }
+      if(!ok) continue;
+      if(len===59){ const f=EAN_FIRST.indexOf(par.join("")); if(f<0) continue; const all=[f,...digs]; if(eanCheck(all)) out.push(all.join("")); }
+      else if(par.every(t=>t==="L") && eanCheck(digs)) out.push(digs.join(""));
+    } }
+  return out;
+}
+function eanLine(px0){ // Helligkeiten einer Linie → gültige Codes (beide Leserichtungen)
+  if(px0.length<120) return [];
+  const n=px0.length*2-1, px=new Float32Array(n); for(let i=0;i<px0.length;i++){ px[2*i]=px0[i]; if(i+1<px0.length) px[2*i+1]=(px0[i]+px0[i+1])/2; } // feiner abtasten
+  const sm=new Float32Array(n); for(let i=1;i<n-1;i++) sm[i]=(px[i-1]+2*px[i]+px[i+1])/4; sm[0]=px[0]; sm[n-1]=px[n-1];
+  const W=Math.max(16, Math.round(n/14)), thr=new Float32Array(n);
+  for(let i=0;i<n;i+=4){ let lo=255, hi=0; for(let j=Math.max(0,i-W);j<Math.min(n,i+W);j+=2){ const v=sm[j]; if(v<lo) lo=v; if(v>hi) hi=v; } const t=hi-lo<28?-1:(lo+hi)/2; for(let k=i;k<Math.min(n,i+4);k++) thr[k]=t; }
+  const res=new Set();
+  for(const rev of [false,true]){
+    const runs=[0]; let cur=false;
+    for(let q=0;q<n;q++){ const i=rev?n-1-q:q; const t=thr[i]; const dark=t>=0 && sm[i]<t;
+      if(dark===cur) runs[runs.length-1]++; else { runs.push(1); cur=dark; } }
+    eanFromRuns(runs).forEach(c=>res.add(c));
+  }
+  return [...res];
+}
+function eanScanImage(img){ // ImageData → häufigster gültiger Code oder null
+  const {width:w, height:h, data:d}=img; const lum=(x,y)=>{ const o=(y*w+x)*4; return d[o]*0.299+d[o+1]*0.587+d[o+2]*0.114; };
+  const hits={};
+  const add=c=>{ hits[c]=(hits[c]||0)+1; };
+  for(let k=-12;k<=12;k++){ const y=Math.round(h/2+k*h/30); if(y<0||y>=h) continue; const row=new Float32Array(w); for(let x=0;x<w;x++) row[x]=lum(x,y); eanLine(row).forEach(add); }
+  for(let k=-8;k<=8;k++){ const x=Math.round(w/2+k*w/22); if(x<0||x>=w) continue; const col=new Float32Array(h); for(let y=0;y<h;y++) col[y]=lum(x,y); eanLine(col).forEach(add); }
+  let best=null; Object.keys(hits).forEach(c=>{ if(!best||hits[c]>hits[best]) best=c; });
+  return best ? {code:best, n:hits[best]} : null;
+}
+
+async function offLookup(code){ // Open Food Facts → {name, p100, pack}
+  const ac=new AbortController(); const t=setTimeout(()=>ac.abort(), 12000);
+  try{
+    const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_de,generic_name_de,brands,nutriments,product_quantity,quantity`, {signal:ac.signal});
+    if(!r.ok && r.status!==404) throw {code:"net"};
+    const j=await r.json(); if(!j || j.status!==1 || !j.product) return null;
+    const p=j.product, n=p.nutriments||{};
+    let kcal=+n["energy-kcal_100g"]; if(!(kcal>0) && +n["energy_100g"]>0) kcal=+n["energy_100g"]/4.184;
+    const name=[String(p.brands||"").split(",")[0].trim(), (p.product_name_de||p.product_name||p.generic_name_de||"").trim()].filter(Boolean).join(" ").replace(/\s+/g," ").slice(0,60);
+    const P = kcal>0 ? {kcal:Math.round(kcal), p:Math.round((+n.proteins_100g||0)*10)/10, c:Math.round((+n.carbohydrates_100g||0)*10)/10, f:Math.round((+n.fat_100g||0)*10)/10} : null;
+    const pack = +p.product_quantity>0 && +p.product_quantity<20000 ? Math.round(+p.product_quantity) : null;
+    return {name, p100:P, pack};
+  }catch(e){ throw {code: ac.signal.aborted ? "timeout" : "net"}; }
+  finally{ clearTimeout(t); }
+}
+
+let BC=null; // laufender Scan
+function bcClose(){ if(!BC) return; BC.stop=true; try{ BC.stream && BC.stream.getTracks().forEach(t=>t.stop()); }catch(_){} const o=$("bcScan"); if(o) o.remove(); BC=null; }
+async function bcOpen(to){
+  bcClose(); BC={to, stop:false, seen:{}};
+  const o=document.createElement("div"); o.id="bcScan";
+  o.innerHTML=`<div class="bc-box"><div class="bc-h"><b>Barcode scannen</b><button class="bc-x" data-act="bcClose" aria-label="Schließen">✕</button></div>
+    <div class="bc-cam"><video id="bcVid" playsinline muted autoplay></video><div class="bc-line"></div></div>
+    <p class="bc-msg" id="bcMsg">Kamera wird gestartet …</p>
+    <div class="bc-man"><input id="bcCode" inputmode="numeric" data-native placeholder="Oder Nummer eintippen" autocomplete="off"><button class="m-btn pri" data-act="bcManual">Suchen</button></div></div>`;
+  document.body.appendChild(o);
+  const msg=t=>{ const m=$("bcMsg"); if(m) m.textContent=t; };
+  let stream=null;
+  try{ stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment", width:{ideal:1280}, height:{ideal:720}}, audio:false}); }
+  catch(e){ msg("Kamera nicht verfügbar – tipp die Nummer unter dem Strichcode ein."); return; }
+  if(!BC || BC.stop){ stream.getTracks().forEach(t=>t.stop()); return; }
+  BC.stream=stream; const v=$("bcVid"); v.srcObject=stream; try{ await v.play(); }catch(_){}
+  msg("Strichcode waagrecht in den Rahmen halten");
+  const det = ("BarcodeDetector" in window) ? (()=>{ try{ return new BarcodeDetector({formats:["ean_13","ean_8","upc_a"]}); }catch(_){ return null; } })() : null;
+  const cv=document.createElement("canvas"), cx=cv.getContext("2d", {willReadFrequently:true});
+  const loop=async()=>{
+    if(!BC || BC.stop) return;
+    try{
+      if(v.videoWidth){
+        let code=null;
+        if(det){ try{ const r=await det.detect(v); if(r && r[0]) code=String(r[0].rawValue||""); }catch(_){ } }
+        if(!code){ const W=Math.min(960, v.videoWidth), H=Math.round(v.videoHeight*W/v.videoWidth); cv.width=W; cv.height=H; cx.drawImage(v,0,0,W,H);
+          const r=eanScanImage(cx.getImageData(0,0,W,H)); if(r){ BC.seen[r.code]=(BC.seen[r.code]||0)+r.n; if(BC.seen[r.code]>=2) code=r.code; } }
+        if(code && /^\d{8,14}$/.test(code)){ bcFound(code); return; }
+      }
+    }catch(_){ }
+    setTimeout(loop, 120);
+  };
+  loop();
+}
+async function bcFound(code){
+  if(!BC) return; const to=BC.to; BC.stop=true; try{ BC.stream && BC.stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+  try{ navigator.vibrate && navigator.vibrate(60); }catch(_){}
+  const m=$("bcMsg"); if(m) m.textContent=`Gefunden: ${code} – Nährwerte werden geladen …`;
+  let prod=null, err=null;
+  try{ prod=await offLookup(code); }catch(e){ err=e; }
+  bcClose();
+  const note = err ? "Produktdaten konnten nicht geladen werden (keine Verbindung?) – fotografiere die Nährwerttabelle oder trag die Werte ein."
+    : !prod ? `Barcode ${code} ist bei Open Food Facts nicht bekannt – fotografiere die Nährwerttabelle oder trag die Werte ein.`
+    : !prod.p100 ? `${prod.name||"Produkt"} gefunden, aber ohne Nährwerte – fotografiere die Nährwerttabelle oder trag die Werte ein.` : null;
+  if(to==="fav"){ const E=favRead(); if(!E) return;
+    if(prod && prod.name && !E.name) E.name=prod.name;
+    if(prod && prod.p100){ E.p100={...prod.p100}; if(prod.pack) E.pack=prod.pack; if(!E.g) E.g=100; E.show100=true; }
+    favRender(note || `${prod.name||"Produkt"}: Nährwerte je 100 g übernommen (Open Food Facts) – trag noch deine Portion ein.`); return; }
+  if(to==="rec"){ const R=UI.recEdit; if(!R) return; try{ recRead(); }catch(_){}
+    if(!note){ R.lab=(R.lab||[]).concat([{name:prod.name||("Produkt "+code), g:0, k100:{...prod.p100}, ean:code}]); recEditor(R, `${prod.name||"Produkt"} hinzugefügt (Open Food Facts) – trag noch die Gramm ein.`); recLabTotals(); }
+    else recEditor(R, note);
+    return; }
+}
+
 function favRead(){ const E=UI.favEd; if(!E) return null; const g=id=>($(id)||{}).value||"";
   if($("fp_name")) E.name=g("fp_name").trim();
   if($("fp_kcal")){ const P={}; let any=false; ["kcal","p","c","f"].forEach(k=>{ const v=num(g("fp_"+k)); P[k]=v>0?v:0; if(v>0) any=true; }); E.p100 = any ? P : null; }
@@ -5430,6 +5564,9 @@ document.addEventListener("click", ev=>{
       // nur den Täglich-Bereich neu zeichnen – Fenster bleibt, wo es ist
       const o = UI.favEd && !UI.recEdit ? favRead() : (UI.recEdit && UI.recEdit.isFav ? UI.recEdit : null); if(!o) break; setD(o);
       const box=$("fvDaily"); if(box) box.outerHTML=favDailyHTML(o.daily); break; }
+    case "bcScan": bcOpen(b.dataset.to); break;
+    case "bcClose": bcClose(); break;
+    case "bcManual": { const c=String(($("bcCode")||{}).value||"").replace(/\D/g,""); if(!/^\d{8,14}$/.test(c)){ const m=$("bcMsg"); if(m) m.textContent="Bitte die 8- bis 13-stellige Nummer eintippen."; break; } bcFound(c); break; }
     case "favShow100": { const E=favRead(); if(E){ E.show100=true; favRender(); } break; }
     case "favG": { const E=favRead(); if(!E) break; E.g=+b.dataset.g; const i=$("fp_g"); if(i) i.value=fmtNum(E.g);
       document.querySelectorAll("[data-act=favG]").forEach(x=>x.classList.toggle("on", +x.dataset.g===E.g)); const sm=$("fpSum"); if(sm) sm.innerHTML=favSumHTML(); break; }

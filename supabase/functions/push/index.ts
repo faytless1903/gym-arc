@@ -1,7 +1,7 @@
 // Gym Arc – Server-Funktion "push" (Supabase Edge Function)
 // Schickt eine Mitteilung aufs iPhone, wenn die Satzpause vorbei ist – auch bei gesperrtem Bildschirm.
 // Keine eigenen Secrets nötig: Die Push-Schlüssel (VAPID) werden beim ersten Aufruf erzeugt und in der Datenbank gespeichert.
-// Aktionen: key | subscribe | unsubscribe | schedule | cancel | tick (vom Zeitplaner) | test
+// Aktionen: key | subscribe | unsubscribe | schedule | cancel | tick (vom Zeitplaner) | test | morning (vom Zeitplaner) | daily
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -139,6 +139,25 @@ Deno.serve(async (req) => {
 
     if (action === "key") return json({ pub: (await keys()).pub });
 
+    if (action === "morning") { // vom Zeitplaner um 4:55 und 5:55 UTC – sendet nur, wenn es in Berlin 6:55 ist
+      const now = new Date();
+      const hm = new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+      if (!b.force && !/^06:5[3-9]$/.test(hm)) return json({ ok: true, skipped: hm });
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+      const rows = await db("push_daily?weigh=eq.true&select=user_id");
+      let n = 0;
+      for (const r of rows) {
+        // schon gewogen? (Eintrag von heute im Dokument "body") → keine Erinnerung
+        let done = false;
+        try {
+          const d = await db("docs?user_id=eq." + r.user_id + "&id=eq.body&select=data");
+          done = !!(d[0] && d[0].data && (d[0].data.entries || []).some((e: { d: string }) => e && e.d === today));
+        } catch (_) { /* im Zweifel erinnern */ }
+        if (!done) n += await deliver(r.user_id, "Zeit zum Wiegen", "");
+      }
+      return json({ ok: true, sent: n });
+    }
+
     if (action === "tick") { // vom Zeitplaner (pg_cron) alle 2 Sekunden, nur wenn eine Pause fällig ist
       const due = await db("push_timers?due_at=lte." + encodeURIComponent(new Date(Date.now() + 1000).toISOString()) + "&select=user_id,due_at,title,body");
       let n = 0;
@@ -177,6 +196,13 @@ Deno.serve(async (req) => {
     }
     if (action === "cancel") {
       await db("push_timers?user_id=eq." + user.id, { method: "DELETE" });
+      return json({ ok: true });
+    }
+    if (action === "daily") {
+      await db("push_daily?on_conflict=user_id", {
+        method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ user_id: user.id, weigh: !!b.weigh }),
+      });
       return json({ ok: true });
     }
     if (action === "test") return json({ ok: true, sent: await deliver(user.id, "Pause vorbei", "So sieht die Mitteilung aus 💪") });

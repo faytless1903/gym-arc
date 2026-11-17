@@ -342,7 +342,7 @@
       }
       if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(k.pub) });
       await callFn("push", { action: "subscribe", sub: sub.toJSON() });
-      localStorage.setItem(PK, "1"); toast2("Mitteilungen an"); lastEnd = undefined;
+      localStorage.setItem(PK, "1"); toast2("Mitteilungen an"); lastEnd = undefined; weighSync();
     }catch(e){ toast2("Einschalten fehlgeschlagen: " + (e.message || e.code)); }
     rerender();
   }
@@ -379,6 +379,7 @@
     ev.preventDefault(); ev.stopPropagation();
     var k = b.getAttribute("data-gpush");
     if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
+    else if(k === "wOn" || k === "wOff"){ try{ localStorage.setItem(WK, k === "wOn" ? "1" : "0"); }catch(_){} weighSync(true); rerender(); }
   }, true);
   /* Claude-Verbrauch im laufenden Monat (geschätzt aus den Tokens, die Anthropic bei jeder Antwort meldet) */
   var UK = "ga-usage";
@@ -443,13 +444,24 @@
     setTimeout(usageLoad, 0);
     return acc + pushHTML();
   } };
+  /* Wiege-Erinnerung um 6:55 (Server schickt sie nur, wenn heute noch kein Gewicht eingetragen ist) */
+  var WK = "ga-weigh";
+  function weighOn(){ try{ return localStorage.getItem(WK) !== "0"; }catch(_){ return true; } }
+  function weighSync(show){
+    callFn("push", { action: "daily", weigh: weighOn() })
+      .then(function(){ try{ localStorage.setItem(WK + "-sync", "1"); }catch(_){} if(show) toast2(weighOn() ? "Erinnerung um 6:55 an" : "Erinnerung um 6:55 aus"); })
+      .catch(function(){ if(show) toast2("Nicht gespeichert – keine Verbindung?"); });
+  }
+  setTimeout(function(){ try{ if(sess && pushOn() && localStorage.getItem(WK + "-sync") !== "1") weighSync(false); }catch(_){} }, 4000);
   function pushHTML(){
     var h = '<div class="fv-l" style="margin-top:18px">Mitteilungen</div>';
     if(!pushSupported() || !installed()) return h + '<p class="st-hint">Meldung bei Pausenende gibt es nur in der App vom Home-Bildschirm (Safari → Teilen → Zum Home-Bildschirm).</p>';
     if(Notification.permission === "denied") return h + '<p class="st-hint">Mitteilungen sind blockiert. Erlauben unter iPhone-Einstellungen → Mitteilungen → Gym Arc.</p>';
     var on = pushOn();
     return h + '<div class="st-seg"><button class="' + (on ? "on" : "") + '" data-gpush="on">An</button><button class="' + (on ? "" : "on") + '" data-gpush="off">Aus</button></div>' +
-      '<p class="st-hint" style="margin-top:-10px">Meldet sich bei gesperrtem iPhone, wenn die Satzpause vorbei ist.' + (on ? ' <a href="#" data-gpush="test" style="color:var(--accent);font-weight:600;text-decoration:none">Testen</a>' : '') + '</p>';
+      '<p class="st-hint" style="margin-top:-10px">Meldet sich, wenn die Satzpause vorbei ist.' + (on ? ' <a href="#" data-gpush="test" style="color:var(--accent);font-weight:600;text-decoration:none">Testen</a>' : '') + '</p>' +
+      (on ? '<div class="fv-l" style="margin-top:14px">Wiegen um 6:55</div><div class="st-seg"><button class="' + (weighOn() ? "on" : "") + '" data-gpush="wOn">An</button><button class="' + (weighOn() ? "" : "on") + '" data-gpush="wOff">Aus</button></div>' +
+        '<p class="st-hint" style="margin-top:-10px">Erinnert morgens ans Wiegen – nur wenn du noch nichts eingetragen hast.</p>' : '');
   }
 
   window.claude = {

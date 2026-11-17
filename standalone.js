@@ -16,7 +16,9 @@
     document.write('<style>:root{color-scheme:light;box-sizing:border-box}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}' +
       /* Home-App: Leiste unten näher an den Rand, mit Abstand zum Home-Balken */
       '.tabbar{padding-bottom:calc(max(env(safe-area-inset-bottom,0px) - 20px, 6px) + 4px)!important}' +
-      ':root{--m-pb:calc(max(env(safe-area-inset-bottom,0px) - 20px, 0px) + 14px)}' +
+      /* Fenster als Blatt vom unteren Rand (wie iOS): kein schwarzer Streifen unten, weniger Abstand oben */
+      ':root{--m-pb:0px}body .modal,body #bcScan{padding-left:0;padding-right:0;padding-top:8px}' +
+      'body .modal-box,body #bcScan .bc-box{border-radius:26px 26px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}body .modal-box{max-height:calc(100dvh - var(--safe-t) - 8px)}' +
       '.gs-card{background:var(--tile);border-radius:14px;padding:0 14px}.gs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;font-weight:600;font-size:16px}.gs-row+.gs-row{border-top:1px solid var(--line)}.gs-row.dis{color:var(--muted)}' +
       '.gs-sw{position:relative;width:51px;height:31px;border-radius:16px;background:color-mix(in srgb,var(--muted) 45%,transparent);flex-shrink:0;transition:background .2s}.gs-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}.gs-sw.on{background:var(--accent)}.gs-sw.on::after{transform:translateX(20px)}.gs-sw:disabled{opacity:.45}' +
       '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}</style>');

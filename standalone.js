@@ -21,8 +21,6 @@
       'body .modal-box,body #bcScan .bc-box{border-radius:26px 26px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}body .modal-box{max-height:calc(100dvh - var(--safe-t) - 8px)}' +
       '.gs-card{background:var(--tile);border-radius:14px;padding:0 14px}.gs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;font-weight:600;font-size:16px}.gs-row+.gs-row{border-top:1px solid var(--line)}.gs-row.dis{color:var(--muted)}' +
       '.gs-sw{position:relative;width:51px;height:31px;border-radius:16px;background:color-mix(in srgb,var(--muted) 45%,transparent);flex-shrink:0;transition:background .2s}.gs-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}.gs-sw.on{background:var(--accent)}.gs-sw.on::after{transform:translateX(20px)}.gs-sw:disabled{opacity:.45}' +
-      /* Querformat auf dem Handy: Hinweis statt verzogener Ansicht (iOS lässt Web-Apps die Drehung nicht sperren) */
-      '@media (orientation:landscape) and (max-height:500px){body::after{content:"Bitte das iPhone ins Hochformat drehen";position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:var(--bg,#000);color:var(--ink,#fff);font:700 20px Archivo,-apple-system,sans-serif}}' +
       '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}</style>');
     document.write('<link rel="manifest" href="manifest.webmanifest">' +
       '<meta name="apple-mobile-web-app-capable" content="yes">' +

@@ -1531,7 +1531,7 @@ window.addEventListener("online", ()=>{ netPaint(); netRetry(); });
 window.addEventListener("offline", netPaint);
 setInterval(()=>{ if(netPending()) netRetry(); }, 15000);
 function cloudErr(e){ if(!navigator.onLine){ netPaint(); return; } try{ console.warn("Cloud-Speichern fehlgeschlagen", e); }catch(_){} if(Date.now()-cloudErrShown>8000){ cloudErrShown=Date.now(); try{ toast("Cloud-Sync fehlgeschlagen ("+((e&&e.code)||(e&&e.message)||"Fehler")+") – lokal gespeichert"); }catch(_){} } }
-window.addEventListener("error", ev=>{ try{ toast("Fehler: "+String(ev.message||"unbekannt").slice(0,80)); }catch(_){} });
+window.addEventListener("error", ev=>{ try{ if(!ev.filename || /^Script error\.?$/i.test(String(ev.message||""))) return; /* fremde Skripte (z. B. Safari-Teilen, Erweiterungen) – nicht unsere App */ toast("Fehler: "+String(ev.message||"unbekannt").slice(0,80)); }catch(_){} });
 window.addEventListener("unhandledrejection", ev=>{ try{ const r=ev.reason; if(r && r.code) return; toast("Fehler: "+String((r&&r.message)||r||"unbekannt").slice(0,80)); }catch(_){} });
 async function initCloud(){
   try{

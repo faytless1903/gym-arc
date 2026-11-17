@@ -203,16 +203,26 @@
 
   function loginNeeded(){ if(document.body) showLogin(); else document.addEventListener("DOMContentLoaded", showLogin); }
   function showLogin(email){
-    box('<h2>Anmelden</h2><p>Gib deine E-Mail-Adresse ein. Du bekommst einen Link zum Anmelden.</p>' +
-      '<input id="gaMail" type="email" autocomplete="email" inputmode="email" data-native placeholder="E-Mail-Adresse" value="' + String(email || CFG.email || "").replace(/"/g, "") + '">' +
-      '<div class="msg" id="gaMsg"></div><button class="pri" id="gaSend">Anmelde-Link senden</button>');
+    box('<h2>Anmelden</h2><p>Mit Passwort – oder ohne Passwort per Link aus einer E-Mail.</p>' +
+      '<input id="gaMail" type="email" autocomplete="username" inputmode="email" data-native placeholder="E-Mail-Adresse" value="' + String(email || CFG.email || (sess && sess.email) || "").replace(/"/g, "") + '">' +
+      '<input id="gaPw" type="password" autocomplete="current-password" data-native placeholder="Passwort">' +
+      '<div class="msg" id="gaMsg"></div><button class="pri" id="gaPwGo">Anmelden</button><button id="gaSend">Ohne Passwort: Link per E-Mail</button>');
+    async function pwLogin(){
+      var em = $("gaMail").value.trim().toLowerCase(), pw = $("gaPw").value;
+      if(!/^\S+@\S+\.\S+$/.test(em)){ msg("Bitte eine gültige E-Mail-Adresse eingeben."); return; }
+      if(!pw){ msg("Bitte Passwort eingeben – oder den Link per E-Mail nutzen."); return; }
+      $("gaPwGo").disabled = true; msg("");
+      try{ var d = await authCall("token?grant_type=password", { email: em, password: pw }); keep(d, em); await afterLogin(); }
+      catch(e){ $("gaPwGo").disabled = false; msg(e.code === "unavailable" ? "Keine Verbindung." : e.code === "rate_limited" ? "Zu viele Versuche – bitte kurz warten." : "E-Mail oder Passwort falsch. Noch kein Passwort? In der App am PC unter Zahnrad → Konto festlegen."); }
+    }
+    $("gaPwGo").onclick = pwLogin; onEnter("gaPw", pwLogin);
     async function send(){
       var em = $("gaMail").value.trim().toLowerCase(); if(!/^\S+@\S+\.\S+$/.test(em)){ msg("Bitte eine gültige E-Mail-Adresse eingeben."); return; }
       $("gaSend").disabled = true; msg("");
       try{ await authCall("otp?redirect_to=" + encodeURIComponent(location.origin + location.pathname), { email: em, create_user: true }); showCode(em); }
-      catch(e){ $("gaSend").disabled = false; msg(e.code === "rate_limited" ? "Zu viele Versuche – bitte kurz warten." : e.code === "unavailable" ? "Keine Verbindung." : "Senden fehlgeschlagen: " + e.message); }
+      catch(e){ $("gaSend").disabled = false; msg(e.code === "rate_limited" ? "Supabase verschickt nur wenige Mails pro Stunde – bitte später nochmal oder mit Passwort anmelden." : e.code === "unavailable" ? "Keine Verbindung." : "Senden fehlgeschlagen: " + e.message); }
     }
-    $("gaSend").onclick = send; onEnter("gaMail", send);
+    $("gaSend").onclick = send;
   }
   function showCode(em){
     box('<h2>E-Mail prüfen</h2><p>Wir haben dir eine E-Mail an <b>' + em.replace(/</g, "&lt;") + '</b> geschickt.</p>' +
@@ -275,6 +285,7 @@
     });
   }
   async function afterLogin(){
+    if(sess && !sess.email){ try{ var t = await token(); var ur = await fetch(BASE + "/auth/v1/user", { headers: { apikey: KEY, Authorization: "Bearer " + t } }); if(ur.ok){ var u = await ur.json(); if(u && u.email){ sess.email = u.email; store(sess); } } }catch(_){} }
     try{ var any = await rest("GET", "?select=id&limit=1"); if(!any || !any.length) await showMigrate(); }catch(_){}
     close(); readyResolve();
   }
@@ -377,14 +388,51 @@
     var k = b.getAttribute("data-gpush");
     if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
   }, true);
+  function showPwSet(){
+    box('<h2>Passwort festlegen</h2><p>Damit meldest du dich auf weiteren Geräten ohne E-Mail an (' + String((sess && sess.email) || "").replace(/</g, "&lt;") + ').</p>' +
+      '<input id="gaNew" type="password" autocomplete="new-password" data-native placeholder="Neues Passwort (mind. 8 Zeichen)">' +
+      '<div class="msg" id="gaMsg"></div><button class="pri" id="gaPwSave">Speichern</button><button id="gaPwX">Abbrechen</button>');
+    $("gaPwX").onclick = close;
+    async function save(){
+      var pw = $("gaNew").value; if(pw.length < 8){ msg("Mindestens 8 Zeichen."); return; }
+      $("gaPwSave").disabled = true; msg("");
+      try{
+        for(var i = 0; i < 2; i++){
+          var t = await token(i > 0), r;
+          try{ r = await fetch(BASE + "/auth/v1/user", { method: "PUT", headers: { apikey: KEY, Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify({ password: pw }) }); }
+          catch(e){ throw E("unavailable", "Keine Verbindung"); }
+          if(r.status === 401 && i === 0) continue;
+          var d = {}; try{ d = await r.json(); }catch(_){}
+          if(!r.ok) throw E("auth", d.msg || d.message || d.error_description || ("Fehler " + r.status));
+          break;
+        }
+        close(); toast2("Passwort gespeichert");
+      }catch(e){ $("gaPwSave").disabled = false; msg(e.code === "unavailable" ? "Keine Verbindung." : "Nicht gespeichert: " + e.message); }
+    }
+    $("gaPwSave").onclick = save; onEnter("gaNew", save);
+    setTimeout(function(){ try{ $("gaNew").focus(); }catch(_){} }, 50);
+  }
+  document.addEventListener("click", function(ev){
+    var b = ev.target.closest && ev.target.closest("[data-gacc]"); if(!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var k = b.getAttribute("data-gacc");
+    if(k === "pw"){ try{ if(typeof closeModal === "function") closeModal(); }catch(_){} showPwSet(); }
+    else if(k === "out"){ window.gymArcLogout(); }
+  }, true);
   window.gymArcPush = { html: function(){
+    var acc = '<div class="fv-l" style="margin-top:18px">Konto</div>' +
+      '<div class="st-bk"><button class="m-btn" data-gacc="pw">Passwort festlegen</button><button class="m-btn" data-gacc="out">Abmelden</button></div>' +
+      '<p class="st-hint">Angemeldet als ' + String((sess && sess.email) || "").replace(/</g, "&lt;") + '. Mit Passwort meldest du weitere Geräte ohne E-Mail an.</p>';
+    return acc + pushHTML();
+  } };
+  function pushHTML(){
     var h = '<div class="fv-l" style="margin-top:18px">Mitteilungen</div>';
     if(!pushSupported() || !installed()) return h + '<p class="st-hint">Meldung bei Pausenende gibt es nur in der App vom Home-Bildschirm (Safari → Teilen → Zum Home-Bildschirm).</p>';
     if(Notification.permission === "denied") return h + '<p class="st-hint">Mitteilungen sind blockiert. Erlauben unter iPhone-Einstellungen → Mitteilungen → Gym Arc.</p>';
     var on = pushOn();
     return h + '<div class="st-seg"><button class="' + (on ? "on" : "") + '" data-gpush="on">An</button><button class="' + (on ? "" : "on") + '" data-gpush="off">Aus</button></div>' +
       '<p class="st-hint" style="margin-top:-10px">Meldet sich bei gesperrtem iPhone, wenn die Satzpause vorbei ist.' + (on ? ' <a href="#" data-gpush="test" style="color:var(--accent);font-weight:600;text-decoration:none">Testen</a>' : '') + '</p>';
-  } };
+  }
 
   window.claude = {
     use: async function(name){

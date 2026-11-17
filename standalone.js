@@ -8,7 +8,7 @@
   var KEY = String(CFG.supabaseKey || "");
   var OWNER = "u_659ficsI1KAHAfHpOlFY1A";           // gleiche Besitzer-ID wie im Artifact → Besitzer-Modus
   var SK = "ga-sb-session";
-  var CONFIGURED = /^https:\/\/.+/.test(BASE) && KEY.length > 20;
+  var CONFIGURED = /^https:\/\/.+/.test(BASE) && KEY.length > 20 && !/DEIN/i.test(BASE + KEY);
 
   /* ---------- Web-App: Manifest, Symbol, Offline ---------- */
   try{
@@ -250,7 +250,9 @@
     Object.keys(d.food || {}).forEach(function(k){ if(/^\d{4}-\d\d-\d\d$/.test(k) && d.food[k]) out.push({ id: "f" + k, data: d.food[k] }); });
     if(d.nutri) out.push({ id: "nutri", data: d.nutri });
     if(d.active) out.push({ id: "active", data: { session: d.active } });
-    return JSON.parse(JSON.stringify(out));
+    var seen = {}, uniq = [];   // doppelte IDs (z. B. ein Training zweimal in der Sicherung) nur einmal schreiben
+    for(var i = out.length - 1; i >= 0; i--){ if(!seen[out[i].id]){ seen[out[i].id] = 1; uniq.unshift(out[i]); } }
+    return JSON.parse(JSON.stringify(uniq));
   }
   function showMigrate(){
     return new Promise(function(done){

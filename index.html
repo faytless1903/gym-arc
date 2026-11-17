@@ -1604,6 +1604,10 @@ function nutriMerge(a, b){ // a = neuerer Stand (gewinnt bei gleichen Einträgen
   NU_LISTS.forEach(k=>{ const del=new Set([...((a.del||{})[k]||[]), ...((b.del||{})[k]||[])]); if(del.size) out.del[k]=[...del].slice(-300);
     out[k]=(out[k]||[]).filter(x=>!(x&&x.id&&del.has(x.id))); const have=new Set(out[k].map(x=>x&&x.id));
     ((b[k])||[]).forEach(x=>{ if(x && x.id && !have.has(x.id) && !del.has(x.id)){ out[k].push(JSON.parse(JSON.stringify(x))); have.add(x.id); } }); });
+  // Einzelwerte (Ziele, Profil …), die im neueren Stand ganz fehlen, aus dem anderen übernehmen – z. B. leere Daten auf einem neuen Gerät
+  Object.keys(b).forEach(k=>{ if(k!=="del" && k!=="upd" && !NU_LISTS.includes(k) && out[k]===undefined && b[k]!=null) out[k]=JSON.parse(JSON.stringify(b[k])); });
+  // laufender Cut geht nie verloren – außer er wurde auf dem neueren Stand bewusst beendet (steht dann in cutHist)
+  if(!(out.cut && out.cut.active) && b.cut && b.cut.active && !(out.cutHist||[]).some(h=>h && h.start===b.cut.start)) out.cut=JSON.parse(JSON.stringify(b.cut));
   return out; }
 const nutriSame=(a,b)=>{ const A=nutriIds(a), B=nutriIds(b); return NU_LISTS.every(k=>A[k].length===B[k].length && A[k].every(id=>B[k].includes(id))); };
 function nutriUnion(n, src){

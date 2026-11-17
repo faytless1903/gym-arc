@@ -4680,7 +4680,6 @@ function foodEditor(it, meal, idx, msg){
     ${sidesBox(it)}
     ${it.ai&&!it.label&&!it.comp?`<p class="nu-hint">Schätzung von Claude – bitte prüfen und bei Bedarf anpassen.</p>`:""}${it.label?`<div class="fd-ok">✓ Von der Nährwerttabelle abgelesen</div>`:""}
     <button class="m-btn pri" data-act="foodSave">${idx<0?"Hinzufügen":"Speichern"}</button>
-    ${it.ai && !it.label?`<button class="m-btn" data-act="refSave">📏 Als Referenz für Foto-Schätzungen merken</button>`:""}
     <div class="fe-save2"><button class="m-btn" data-act="favToggle">${isFav(it)?"★ Favorit":"☆ Favorit"}</button><button class="m-btn" data-act="kanSave">${kanList().some(x=>(x.name||"").toLowerCase()===(it.name||"").toLowerCase())?"✓ Kantine":"🍽 Kantine"}</button></div>
 
     ${idx>=0?`<button class="m-btn red" data-act="foodDel">Löschen</button>`:""}`);
@@ -4691,11 +4690,18 @@ function foodSave(){
   const it={...e.it, name:g("name").trim()||"Mahlzeit", kcal:num(g("kcal"))||0, p:num(g("p"))||0, c:num(g("c"))||0, f:num(g("f"))||0, t:e.it.t||Date.now()};
   if(!it.p100 && it.base){ const x=it.amt||1; if(Math.abs(it.kcal-Math.round(it.base.kcal*x))>1){ it.base={kcal:it.kcal,p:it.p,c:it.c,f:it.f}; it.amt=1; } }
   if(it.p100 && it.grams){ const exp=Math.round(it.p100.kcal*it.grams/100); if(Math.abs(it.kcal-exp)>1){ delete it.p100; it.base={kcal:it.kcal,p:it.p,c:it.c,f:it.f}; it.amt=1; } }
+  // Foto-Schätzung von Hand korrigiert → automatisch als Referenz für künftige Foto-Schätzungen merken
+  let refNote=false;
+  if(e.it.ai && !e.it.label){ const o=e.it.main||e.it;
+    if(Math.abs((it.kcal||0)-(o.kcal||0))>=10 || ["p","c","f"].some(m=>Math.abs((it[m]||0)-(o[m]||0))>=3)){
+      const n=NU(); n.photoRefs=(n.photoRefs||[]).filter(r=>r.name!==it.name);
+      n.photoRefs.push({id:"ref"+Date.now().toString(36), name:it.name, desc:`${it.name}${it.parts?` (${String(it.parts).slice(0,140)})`:""}: so eine Portion`, kcal:Math.round(it.kcal), p:Math.round(it.p), c:Math.round(it.c), f:Math.round(it.f), t:Date.now()});
+      if(n.photoRefs.length>30) n.photoRefs.shift(); saveNutri(); refNote=true; } }
   if(it.comp){ const t=compSum(it.comp); if(Math.abs(it.kcal-t.kcal)>1) delete it.comp; else it.parts=compText(it.comp); }   // Werte von Hand geändert → Bestandteile lösen
   if((it.sides||[]).length){ it.main={kcal:it.kcal,p:it.p,c:it.c,f:it.f}; const t=sumSides(it.sides); ["kcal","p","c","f"].forEach(k=>it[k]=Math.round(it.main[k]+t[k])); } else { delete it.sides; delete it.main; }
   if(e.idx<0) d[e.meal].push(it); else d[e.meal][e.idx]=it;
   if(e.it.sid) it.sid=e.it.sid;
-  saveFoodDay(k); UI.foodEdit=null; closeModal(); keepScrollHome(renderHome); toast(it.name+" gespeichert"); if(UI.mealOpen===e.meal) mealOpen(e.meal);
+  saveFoodDay(k); UI.foodEdit=null; closeModal(); keepScrollHome(renderHome); toast(it.name+" gespeichert"+(refNote?" · Korrektur für Foto-Schätzungen gemerkt":"")); if(UI.mealOpen===e.meal) mealOpen(e.meal);
 }
 function foodDel(){ const e=UI.foodEdit; if(!e) return; const k=UI.foodDay||todayKey(); foodDay(k)[e.meal].splice(e.idx,1); saveFoodDay(k); UI.foodEdit=null; closeModal(); keepScrollHome(renderHome); if(UI.mealOpen===e.meal) mealOpen(e.meal); }
 /* ---------- Bundeslebensmittelschlüssel (BLS 4.0) ----------

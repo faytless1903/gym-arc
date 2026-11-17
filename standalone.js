@@ -442,7 +442,7 @@
       '<p class="st-hint">Angemeldet als ' + String((sess && sess.email) || "").replace(/</g, "&lt;") + '. Mit Passwort meldest du weitere Geräte ohne E-Mail an.</p>' +
       '<div class="fv-l" style="margin-top:18px">Claude</div><p class="st-hint" id="gaUse">' + usageText(usageCache()) + '</p>';
     setTimeout(usageLoad, 0);
-    return acc + pushHTML();
+    return acc + healthHTML() + pushHTML();
   } };
   /* Wiege-Erinnerung um 6:55 (Server schickt sie nur, wenn heute noch kein Gewicht eingetragen ist) */
   var WK = "ga-weigh";
@@ -462,6 +462,187 @@
       '<p class="st-hint" style="margin-top:-10px">Meldet sich, wenn die Satzpause vorbei ist.' + (on ? ' <a href="#" data-gpush="test" style="color:var(--accent);font-weight:600;text-decoration:none">Testen</a>' : '') + '</p>' +
       (on ? '<div class="fv-l" style="margin-top:14px">Wiegen um 6:55</div><div class="st-seg"><button class="' + (weighOn() ? "on" : "") + '" data-gpush="wOn">An</button><button class="' + (weighOn() ? "" : "on") + '" data-gpush="wOff">Aus</button></div>' +
         '<p class="st-hint" style="margin-top:-10px">Erinnert morgens ans Wiegen – nur wenn du noch nichts eingetragen hast.</p>' : '');
+  }
+
+  /* ---------- Fortschrittsfotos (privat in Supabase Storage) + Vergleich durch Claude ---------- */
+  function uidOf(){ try{ var p = sess.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return JSON.parse(atob(p + "===".slice((p.length + 3) % 4))).sub; }catch(_){ return null; } }
+  async function stor(method, path, body, ctype){
+    for(var i = 0; i < 2; i++){
+      var t = await token(i > 0), r;
+      try{ r = await fetch(BASE + "/storage/v1/" + path, { method: method, cache: "no-store",
+          headers: Object.assign({ apikey: KEY, Authorization: "Bearer " + t }, ctype ? { "Content-Type": ctype } : {}), body: body }); }
+      catch(e){ throw E("unavailable", "Keine Verbindung"); }
+      if(r.status === 401 && i === 0) continue;
+      if(!r.ok){ var tx = ""; try{ tx = await r.text(); }catch(_){} throw E(r.status === 404 ? "not_found" : "storage", tx.slice(0, 160) || ("Fehler " + r.status)); }
+      return r;
+    }
+    throw E("not_granted");
+  }
+  var PH = { list: null, urls: {}, notes: null, busy: false, sel: null };
+  async function phList(force){
+    if(PH.list && !force) return PH.list;
+    var uid = uidOf(); if(!uid) return [];
+    var r = await stor("POST", "object/list/photos", JSON.stringify({ prefix: uid, limit: 300, offset: 0, sortBy: { column: "name", order: "desc" } }), "application/json");
+    var a = await r.json();
+    PH.list = (a || []).filter(function(o){ return /\.jpe?g$/i.test(o.name || ""); }).map(function(o){ return { name: o.name, path: uid + "/" + o.name, day: o.name.slice(0, 10) }; });
+    return PH.list;
+  }
+  async function phUrl(p){
+    if(PH.urls[p.path]) return PH.urls[p.path];
+    var r = await stor("GET", "object/authenticated/photos/" + p.path.split("/").map(encodeURIComponent).join("/"));
+    var u = URL.createObjectURL(await r.blob()); PH.urls[p.path] = u; return u;
+  }
+  async function phBlob(p){ var r = await fetch(await phUrl(p)); return r.blob(); }
+  async function phNotes(){
+    if(PH.notes) return PH.notes;
+    try{ var rows = await rest("GET", "?select=data&id=eq.photonotes"); PH.notes = (rows && rows[0] && rows[0].data) || { notes: {} }; }catch(_){ PH.notes = { notes: {} }; }
+    PH.notes.notes = PH.notes.notes || {}; return PH.notes;
+  }
+  async function phSaveNotes(){ await upsert([{ id: "photonotes", data: PH.notes }]); }
+  function today(){ var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function deDate(day){ try{ return new Date(day + "T12:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" }); }catch(_){ return day; } }
+  function esc2(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function phRefresh(){ try{ if(UI.tab === "progress" && typeof renderHome === "function") renderHome(); }catch(_){} }
+  async function phFill(){ // Vorschaubilder nachladen
+    var row = document.getElementById("gphRow"); if(!row) return;
+    var L; try{ L = await phList(); }catch(e){ row.innerHTML = '<p class="pc-sub" style="margin:0">Fotos konnten nicht geladen werden.</p>'; return; }
+    if(!L.length){ row.innerHTML = '<p class="pc-sub" style="margin:0">Noch keine Fotos. Am besten alle 2–3 Wochen, morgens, gleiches Licht, gleiche Pose.</p>'; return; }
+    row.innerHTML = L.slice(0, 30).map(function(p){ return '<button class="gph-th" data-gph="view" data-p="' + esc2(p.path) + '"><img alt="" data-src="' + esc2(p.path) + '"><span>' + deDate(p.day) + '</span></button>'; }).join("");
+    var cmp = document.getElementById("gphCmp"); if(cmp) cmp.style.display = L.length >= 2 ? "" : "none";
+    L.slice(0, 30).forEach(function(p){ phUrl(p).then(function(u){ var im = row.querySelector('img[data-src="' + p.path + '"]'); if(im) im.src = u; }).catch(function(){}); });
+    var n = await phNotes(); var last = L[0] && n.notes[L[0].name];
+    var nt = document.getElementById("gphNote"); if(nt) nt.innerHTML = last ? "<b>Letzter Vergleich (" + deDate(L[0].day) + " vs. " + deDate(last.vs) + "):</b> " + esc2(last.kurz || last.text) : "";
+  }
+  async function phUpload(file){
+    if(!file || PH.busy) return; PH.busy = true;
+    try{
+      toast2("Foto wird gespeichert …");
+      var bmp = await createImageBitmap(file); var sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      var c = document.createElement("canvas"); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc); c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+      var blob = await new Promise(function(res){ c.toBlob(function(x){ res(x); }, "image/jpeg", .85); });
+      var uid = uidOf(); if(!uid) throw E("not_granted", "Nicht angemeldet");
+      await stor("POST", "object/photos/" + uid + "/" + today() + "_" + Date.now() + ".jpg", blob, "image/jpeg");
+      PH.list = null; toast2("Foto gespeichert"); phRefresh();
+    }catch(e){ toast2("Foto nicht gespeichert: " + (e.message || e.code)); }
+    finally{ PH.busy = false; }
+  }
+  async function phView(path){
+    var L = await phList(); var p = L.find(function(x){ return x.path === path; }); if(!p) return;
+    var u = await phUrl(p); var n = (await phNotes()).notes[p.name];
+    modal('<h3>' + deDate(p.day) + '</h3><img src="' + u + '" alt="Fortschrittsfoto" style="width:100%;border-radius:16px;display:block;margin-bottom:12px">' +
+      (n ? '<p><b>Vergleich mit ' + deDate(n.vs) + ':</b> ' + esc2(n.text) + '</p>' : '') +
+      '<button class="m-btn red" data-gph="del" data-p="' + esc2(p.path) + '">Foto löschen</button>');
+  }
+  async function phDelete(path){
+    try{ await stor("DELETE", "object/photos", JSON.stringify({ prefixes: [path] }), "application/json"); PH.list = null; try{ closeModal(); }catch(_){} toast2("Foto gelöscht"); phRefresh(); }
+    catch(e){ toast2("Löschen fehlgeschlagen: " + (e.message || e.code)); }
+  }
+  async function phCompareDialog(){
+    var L = await phList(); if(L.length < 2) return;
+    var a = L[0], older = L.slice(1);
+    // Vorschlag: das Foto, das am nächsten an 3 Wochen vorher liegt
+    var target = new Date(a.day + "T12:00:00").getTime() - 21 * 864e5; var best = older[0];
+    older.forEach(function(p){ if(Math.abs(new Date(p.day + "T12:00:00") - target) < Math.abs(new Date(best.day + "T12:00:00") - target)) best = p; });
+    PH.sel = best.path;
+    var ua = await phUrl(a), ub = await phUrl(best);
+    modal('<h3>Fotos vergleichen</h3>' +
+      '<div class="gph-two"><figure><img src="' + ub + '" id="gphB" alt=""><figcaption id="gphBd">' + deDate(best.day) + '</figcaption></figure><figure><img src="' + ua + '" alt=""><figcaption>' + deDate(a.day) + '</figcaption></figure></div>' +
+      '<div class="fv-l" style="margin-top:12px">Vergleichen mit</div><div class="gph-pick">' + older.slice(0, 20).map(function(p){ return '<button class="' + (p.path === best.path ? "on" : "") + '" data-gph="pick" data-p="' + esc2(p.path) + '">' + deDate(p.day) + '</button>'; }).join("") + '</div>' +
+      '<button class="m-btn pri" data-gph="run">Mit Claude vergleichen</button><p class="nu-hint" style="margin-top:8px">Beide Fotos gehen zur Auswertung an Claude (ca. 1–2 Cent) und werden dort nicht gespeichert.</p>');
+  }
+  async function phPick(path){
+    PH.sel = path; var L = await phList(); var p = L.find(function(x){ return x.path === path; }); if(!p) return;
+    var im = document.getElementById("gphB"); if(im) im.src = await phUrl(p); var d = document.getElementById("gphBd"); if(d) d.textContent = deDate(p.day);
+    document.querySelectorAll('[data-gph="pick"]').forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-p") === path); });
+  }
+  async function phRun(){
+    var L = await phList(); var a = L[0], b = L.find(function(x){ return x.path === PH.sel; }); if(!a || !b) return;
+    var info = ""; try{ var n = NU(); info = (n.sex === "w" ? "Frau" : "Mann") + (n.height ? ", " + n.height + " cm" : "") + (n.age ? ", " + n.age + " Jahre" : ""); }catch(_){}
+    var kgA = null, kgB = null; try{ var bl = (S.body || []); var f = function(day){ var x = bl.filter(function(e){ return e.d <= day; }).sort(function(p, q){ return p.d < q.d ? 1 : -1; })[0]; return x ? x.kg : null; }; kgA = f(a.day); kgB = f(b.day); }catch(_){}
+    modal('<h3>Claude vergleicht …</h3><p>' + deDate(b.day) + ' → ' + deDate(a.day) + '</p>');
+    try{
+      var res = await SAMPLE.json('Du bekommst zwei Fortschrittsfotos derselben Person (' + info + ') in einer Diät-/Cut-Phase mit Krafttraining. Bild 1 = früher (' + b.day + (kgB ? ", " + kgB + " kg" : "") + '), Bild 2 = jetzt (' + a.day + (kgA ? ", " + kgA + " kg" : "") + ').\n' +
+        'Vergleiche sachlich und konkret, was sich sichtbar verändert hat (Bauch, Taille, Brust, Schultern, Arme, Rücken, Definition). Berücksichtige, dass Licht, Pose und Pump das Bild verfälschen können, und sag es, wenn die Fotos schlecht vergleichbar sind.\n' +
+        'Antworte NUR mit JSON: {"kurz":"ein Satz Fazit","text":"3–5 Sätze Details","kfa_jetzt":Zahl oder null,"vergleichbar":true/false}',
+        { images: [await phBlob(b), await phBlob(a)], modelTier: "default" });
+      var n2 = await phNotes(); n2.notes[a.name] = { vs: b.day, kurz: String(res.kurz || "").slice(0, 200), text: String(res.text || res.kurz || "").slice(0, 1200), kfa: +res.kfa_jetzt || null, t: Date.now() };
+      try{ await phSaveNotes(); }catch(_){}
+      modal('<h3>' + deDate(b.day) + ' → ' + deDate(a.day) + '</h3><p><b>' + esc2(res.kurz || "") + '</b></p><p>' + esc2(res.text || "") + '</p>' +
+        (res.kfa_jetzt ? '<p class="nu-hint">Geschätzter Körperfettanteil jetzt: ca. ' + esc2(res.kfa_jetzt) + ' % (± 3–5 %).</p>' : '') +
+        (res.vergleichbar === false ? '<p class="nu-hint warn">Die Fotos sind nur eingeschränkt vergleichbar – nächstes Mal gleiches Licht und gleiche Pose.</p>' : '') +
+        '<button class="m-btn pri" data-act="closeModal">Fertig</button>');
+      phRefresh();
+    }catch(e){ modal('<h3>Vergleich fehlgeschlagen</h3><p>' + esc2(e.message || e.code || "Unbekannter Fehler") + '</p><button class="m-btn" data-act="closeModal">Schließen</button>'); }
+  }
+  document.addEventListener("click", function(ev){
+    var b = ev.target.closest && ev.target.closest("[data-gph]"); if(!b) return;
+    var k = b.getAttribute("data-gph"); if(k === "add") return;   // Datei-Auswahl läuft über das Label
+    ev.preventDefault(); ev.stopPropagation();
+    var p = b.getAttribute("data-p");
+    if(k === "view") phView(p); else if(k === "del") phDelete(p); else if(k === "cmp") phCompareDialog(); else if(k === "pick") phPick(p); else if(k === "run") phRun();
+  }, true);
+  document.addEventListener("change", function(ev){ if(ev.target && ev.target.id === "gphIn"){ var f = ev.target.files && ev.target.files[0]; ev.target.value = ""; phUpload(f); } });
+  window.gymArcPhotos = { html: function(){
+    if(!sess) return "";
+    setTimeout(phFill, 0);
+    return '<div class="pcard gph"><div class="pc-h"><h3>Fortschrittsfotos</h3><label class="pill-btn" data-gph="add">+ Foto<input type="file" id="gphIn" accept="image/*" style="display:none"></label></div>' +
+      '<div class="gph-row" id="gphRow"><p class="pc-sub" style="margin:0">Fotos werden geladen …</p></div>' +
+      '<p class="pc-sub" id="gphNote" style="margin:10px 0 0"></p>' +
+      '<button class="m-btn" id="gphCmp" data-gph="cmp" style="display:none;margin-top:12px">Mit früherem Foto vergleichen</button></div>';
+  } };
+
+  /* ---------- Apple Health: Schritte + aktive Kalorien (kommen per Kurzbefehl an die Funktion "health") ---------- */
+  var HL = { data: null, at: 0 };
+  async function hlLoad(force){
+    if(!sess) return null; if(HL.data && !force && Date.now() - HL.at < 60000) return HL.data;
+    try{ var rows = await rest("GET", "?select=data&id=eq.health"); var d = rows && rows[0] && rows[0].data; var changed = JSON.stringify(d) !== JSON.stringify(HL.data); HL.data = d || null; HL.at = Date.now();
+      if(changed){ try{ if(UI.tab === "nutrition" && typeof renderHome === "function" && !document.querySelector("#modal.open")) renderHome(); }catch(_){} } }catch(_){}
+    return HL.data;
+  }
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) hlLoad(true); });
+  setTimeout(function(){ hlLoad(true); }, 2500);
+  window.gymArcHealth = {
+    // Tagesziel an die Bewegung anpassen: 75 % der Abweichung vom eigenen 28-Tage-Schnitt, höchstens ± 250 kcal, erst ab 7 Tagen Daten
+    day: function(k){
+      var D = HL.data && HL.data.days; if(!D) { hlLoad(); return null; }
+      var x = D[k]; if(!x) return null;
+      var keys = Object.keys(D).filter(function(d){ return d < k && D[d] && D[d].active != null; }).sort().slice(-28);
+      var bonus = 0;
+      if(keys.length >= 7 && x.active != null){
+        var avg = keys.reduce(function(s, d){ return s + D[d].active; }, 0) / keys.length;
+        bonus = Math.max(-250, Math.min(250, Math.round((x.active - avg) * 0.75 / 10) * 10));
+      }
+      return { steps: x.steps, active: x.active, bonus: bonus, n: keys.length };
+    }
+  };
+  async function hlToken(){
+    try{
+      var d = await callFn("health", { action: "newtoken" });
+      var url = BASE + "/functions/v1/health";
+      modal('<h3>Apple Health verbinden</h3><p>Lege in der Kurzbefehle-App einen Kurzbefehl an (Anleitung unten). Er braucht diese zwei Angaben:</p>' +
+        '<div class="fv-l">Adresse</div><div class="gh-copy"><code id="ghUrl">' + url + '</code><button class="pill-btn" data-ghc="ghUrl">Kopieren</button></div>' +
+        '<div class="fv-l" style="margin-top:10px">Dein Schlüssel</div><div class="gh-copy"><code id="ghTok">' + d.token + '</code><button class="pill-btn" data-ghc="ghTok">Kopieren</button></div>' +
+        '<p class="nu-hint" style="margin-top:10px">Ein neuer Schlüssel macht den alten ungültig. Gib ihn niemandem weiter.</p>' +
+        '<div class="fv-l" style="margin-top:12px">Kurzbefehl</div><ol class="gh-steps">' +
+        '<li><b>Health-Beispiele suchen</b> („Find Health Samples“): Typ <b>Schritte</b>, Startdatum <b>ist heute</b></li>' +
+        '<li><b>Statistik berechnen</b> („Calculate Statistics“): <b>Summe</b> → umbenennen in <i>Schritte</i></li>' +
+        '<li>Nochmal <b>Health-Beispiele suchen</b>: Typ <b>Aktive Energie</b>, Startdatum <b>ist heute</b> → <b>Statistik berechnen: Summe</b> → umbenennen in <i>Aktiv</i></li>' +
+        '<li><b>Inhalte von URL abrufen</b> („Get Contents of URL“): Adresse von oben, Methode <b>POST</b>, Hauptteil <b>JSON</b> mit drei Feldern: <code>token</code> (Text: dein Schlüssel), <code>steps</code> (Zahl: <i>Schritte</i>), <code>active</code> (Zahl: <i>Aktiv</i>)</li>' +
+        '<li>Unter <b>Automation</b> → <b>Tageszeit</b>: z. B. 12:00, 18:00 und 21:30 → <b>Sofort ausführen</b></li></ol>' +
+        '<button class="m-btn pri" data-act="closeModal">Fertig</button>');
+    }catch(e){ toast2("Nicht möglich: " + (e.message || e.code)); }
+  }
+  document.addEventListener("click", function(ev){
+    var b = ev.target.closest && ev.target.closest("[data-ghc],[data-gh]"); if(!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    if(b.hasAttribute("data-gh")){ try{ closeModal(); }catch(_){} hlToken(); return; }
+    var el = document.getElementById(b.getAttribute("data-ghc")); if(!el) return;
+    try{ navigator.clipboard.writeText(el.textContent).then(function(){ toast2("Kopiert"); }); }catch(_){ toast2("Bitte lange drücken und kopieren"); }
+  }, true);
+  function healthHTML(){
+    var D = HL.data && HL.data.days, last = D ? Object.keys(D).sort().pop() : null;
+    return '<div class="fv-l" style="margin-top:18px">Apple Health</div><button class="m-btn" data-gh="1" style="margin:0">' + (last ? "Kurzbefehl neu einrichten" : "Schritte & aktive Kalorien verbinden") + '</button>' +
+      '<p class="st-hint" style="margin-top:8px">' + (last ? "Zuletzt empfangen: " + deDate(last) + (D[last].steps != null ? " · " + Number(D[last].steps).toLocaleString("de-DE") + " Schritte" : "") + (D[last].active != null ? " · " + D[last].active + " kcal aktiv" : "") + "." : "Ein iPhone-Kurzbefehl schickt Schritte und aktive Kalorien aus Health. Dein Kalorienziel passt sich dann an Tage mit viel oder wenig Bewegung an.") + '</p>';
   }
 
   window.claude = {

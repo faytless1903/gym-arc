@@ -262,6 +262,14 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 #bcScan .bc-line{position:absolute;z-index:2;left:10%;right:10%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30}
 #bcScan .bc-msg{color:var(--muted);font-size:14px;margin:10px 2px}
 #bcScan .bc-man{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#bcScan .bc-man input{width:100%;min-width:0;box-sizing:border-box;border:0;border-radius:14px;background:var(--tile);color:var(--ink);padding:0 14px;font:inherit;font-size:16px;min-height:52px}#bcScan .bc-man .m-btn{margin:0;padding:0 18px;width:auto}
+.fd-act{font-size:13px;color:var(--muted);text-align:center;margin-top:6px}
+.gph-row{display:flex;gap:8px;overflow-x:auto;margin:12px -4px 0;padding:0 4px 2px;scrollbar-width:none}.gph-row::-webkit-scrollbar{display:none}
+.gph-th{flex:0 0 86px;display:flex;flex-direction:column;gap:4px;background:none;padding:0;color:var(--muted);font-size:12px;font-weight:600}
+.gph-th img{width:86px;height:114px;object-fit:cover;border-radius:12px;background:var(--tile);display:block}
+.gph-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gph-two figure{margin:0}.gph-two img{width:100%;aspect-ratio:3/4;max-height:34vh;object-fit:cover;border-radius:12px;background:var(--tile);display:block}.gph-two figcaption{text-align:center;font-size:13px;color:var(--muted);margin-top:4px}
+.gph-pick{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;scrollbar-width:none}.gph-pick button{flex:0 0 auto;background:var(--tile);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600}.gph-pick button.on{background:var(--accent);color:#fff}
+.gh-copy{display:flex;gap:8px;align-items:center;background:var(--tile);border-radius:12px;padding:8px 8px 8px 12px}.gh-copy code{flex:1;min-width:0;font-size:12px;word-break:break-all;color:var(--ink)}
+.gh-steps{padding-left:20px;margin:4px 0 14px;color:var(--muted);font-size:14px;line-height:1.45}.gh-steps li{margin-bottom:6px}.gh-steps code{font-size:12px;background:var(--tile);border-radius:6px;padding:1px 5px}
 .fe-save2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.fe-save2 .m-btn{margin:0}
 
 .ck-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warm);vertical-align:middle;margin-left:4px}
@@ -3041,7 +3049,7 @@ function renderComp(){
 function renderProgress(){
   const t=UI.progTab||"body";
   const tabs=`<div class="rng nu-tabs">${[["body","Körper"],["train","Training"]].map(([k,l])=>`<button class="${t===k?"on":""}" data-act="progTab" data-t="${k}">${l}</button>`).join("")}</div>`;
-  return `<div class="home"><div class="h-title">Fortschritt</div>${tabs}${t==="body" ? renderBody()+renderComp() : renderCalendar()+renderExerciseCharts()+renderVolume()}</div>`;
+  return `<div class="home"><div class="h-title">Fortschritt</div>${tabs}${t==="body" ? renderBody()+renderComp()+((window.gymArcPhotos&&window.gymArcPhotos.html())||"") : renderCalendar()+renderExerciseCharts()+renderVolume()}</div>`;
 }
 
 /* ================= Plan-Editor ================= */
@@ -3732,6 +3740,8 @@ function proteinGapCard(t, T){
 }
 function renderTracking(){
   const k = UI.foodDay || todayKey(); const d=foodDay(k); const t=dayTotals(k); const T=nuTargets();
+  // Apple Health (nur eigenständige App): Ziel an die Bewegung des Tages anpassen
+  const HB=(window.gymArcHealth && T) ? window.gymArcHealth.day(k) : null; if(HB && HB.bonus){ T.kcal+=HB.bonus; T.c=Math.max(0, Math.round(T.c+HB.bonus/4)); }
   const dt=new Date(k+"T12:00:00"); const isToday = k===todayKey();
   const lbl = isToday? "Heute" : (k===todayKey(new Date(Date.now()-864e5))? "Gestern" : dt.toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long"}));
   // Kalorien: über dem Ziel = rot. Eiweiß/KH/Fett: Ziel erreicht = blau (mehr ist ok, solange die Kalorien passen)
@@ -3743,7 +3753,7 @@ function renderTracking(){
     <div class="fd-nav"><button data-act="foodDay" data-d="-1" aria-label="Vortag">‹</button><div><b>${lbl}</b>${isToday?"":`<span>${dt.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"})}</span>`}</div><button data-act="foodDay" data-d="1" ${isToday?"disabled":""} aria-label="Nächster Tag">›</button></div>
     <div class="pcard fd-sum">
       ${T? `<div class="fd-kcal ${rest>=0?"ok":"over"}"><b>${rest>=0? rest.toLocaleString("de-DE") : "+"+(-rest).toLocaleString("de-DE")}</b><span>${rest>=0?"kcal übrig":"kcal über dem Ziel"}</span></div>
-        <div class="fb k fd-kbar"><div class="fb-t"><i class="${Math.round(t.kcal)>T.kcal?"over":""}" style="width:${Math.min(100,t.kcal/T.kcal*100)}%"></i></div><div class="fd-kof">${Math.round(t.kcal).toLocaleString("de-DE")} von ${T.kcal.toLocaleString("de-DE")} kcal gegessen</div></div>` : `<div class="nu-hint">Lege unter „Ziele“ dein Ziel fest, dann siehst du hier deinen Tagesstand.</div>${bar("Kalorien",t.kcal,null,"kcal","k")}`}
+        <div class="fb k fd-kbar"><div class="fb-t"><i class="${Math.round(t.kcal)>T.kcal?"over":""}" style="width:${Math.min(100,t.kcal/T.kcal*100)}%"></i></div><div class="fd-kof">${Math.round(t.kcal).toLocaleString("de-DE")} von ${T.kcal.toLocaleString("de-DE")} kcal gegessen</div>${HB?`<div class="fd-act">${HB.steps!=null?Number(HB.steps).toLocaleString("de-DE")+" Schritte":""}${HB.steps!=null&&HB.active!=null?" · ":""}${HB.active!=null?HB.active+" kcal aktiv":""}${HB.bonus?` · Ziel ${HB.bonus>0?"+":""}${HB.bonus} kcal`:HB.n<7?" · Ziel-Anpassung ab 7 Tagen":""}</div>`:""}</div>` : `<div class="nu-hint">Lege unter „Ziele“ dein Ziel fest, dann siehst du hier deinen Tagesstand.</div>${bar("Kalorien",t.kcal,null,"kcal","k")}`}
       ${bar("Eiweiß",t.p,T&&T.p,"g","p")}
       ${bar("Kohlenhydrate",t.c,T&&T.c,"g","c")}
       ${bar("Fett",t.f,T&&T.f,"g","f")}

@@ -2717,9 +2717,12 @@ function scoreSession(a){
 }
 const scoreLabel = s => s>=90?"Top-Training":s>=75?"Starkes Training":s>=60?"Solides Training":"Ausbaufähig";
 function scoreRing(sc, size=150){
-  const r=size/2-9, C=2*Math.PI*r;
-  return `<div class="sring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(--tile)" stroke-width="10" fill="none"/>
-    <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(--accent)" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-sc/100)}"/></svg>
+  // Runde Enden ragen über den Bogen hinaus – Länge darum um eine Strichbreite kürzen und den Start um eine halbe verschieben,
+  // sonst berühren sich die Enden bei hohen Werten fast und es entsteht eine unsaubere Kerbe. Spur in Akzentfarbe, damit die Lücke als „fehlt noch“ lesbar ist.
+  const r=size/2-9, C=2*Math.PI*r, sw=10, fr=Math.max(0, Math.min(1, sc/100));
+  const len = fr>=1 ? C : Math.max(0.01, C*fr - sw), rot = fr>=1 ? 0 : (sw/2)/C*360, c=size/2;
+  return `<div class="sring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}"><circle cx="${c}" cy="${c}" r="${r}" stroke="color-mix(in srgb, var(--accent) 16%, var(--tile))" stroke-width="${sw}" fill="none"/>
+    <circle cx="${c}" cy="${c}" r="${r}" stroke="var(--accent)" stroke-width="${sw}" fill="none" stroke-linecap="${fr>=1?"butt":"round"}" stroke-dasharray="${C}" stroke-dashoffset="${C-len}" transform="rotate(${rot} ${c} ${c})"/></svg>
     <div><b style="font-size:${Math.round(size*.36)}px" data-count="${sc}">${sc}</b></div></div>`;
 }
 function scoreBars(s){

@@ -555,8 +555,8 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .prev-t span{color:var(--muted);font-weight:500}
 .prev-g{display:grid;grid-template-columns:44px 1fr 1fr 64px;text-align:center;color:var(--muted);font-size:16px;row-gap:6px;font-variant-numeric:tabular-nums}
 .prev-g .hd{font-size:12px;font-weight:600;color:var(--faint)}
-#restDone{position:fixed;left:50%;bottom:calc(var(--safe-b) + 12px);transform:translate(-50%,140%);width:calc(100% - 24px);max-width:496px;z-index:60;background:var(--accent);color:#fff;border-radius:20px;padding:14px 14px 14px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .3s cubic-bezier(.2,.8,.2,1)}
-#restDone.show{transform:translate(-50%,0);animation:rdGlow 1.2s ease-in-out 3}
+#restDone{position:fixed;left:50%;bottom:calc(var(--safe-b) + 12px);transform:translate(-50%,calc(100% + var(--safe-b) + 40px));opacity:0;visibility:hidden;width:calc(100% - 24px);max-width:496px;z-index:60;background:var(--accent);color:#fff;border-radius:20px;padding:14px 14px 14px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .25s,visibility 0s .3s}
+#restDone.show{transform:translate(-50%,0);opacity:1;visibility:visible;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s,visibility 0s;animation:rdGlow 1.2s ease-in-out 3}
 #restDone .rd-txt{flex:1;min-width:0}
 #restDone .rd-s b{font-weight:800;font-size:14px}
 #restDone .rd-t{font-size:20px;font-weight:800;line-height:1.1}
@@ -564,8 +564,9 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 #restDone .rd-go{flex-shrink:0;background:#fff;color:var(--accent);font-weight:800;font-size:16px;border-radius:14px;padding:12px 18px}
 @keyframes rdGlow{50%{box-shadow:0 0 0 6px rgba(51,70,255,.35),0 10px 30px rgba(0,0,0,.25)}}
 /* Läuft das Training im Hintergrund, liegt der Hinweis genau über der "… läuft"-Karte */
-#restDone.on-resume{bottom:calc(var(--safe-b) + 78px);width:calc(100% - 28px);max-width:492px;min-height:var(--rs-h,64px);border-radius:18px;transform:translate(-50%,0) scale(.96);opacity:0;pointer-events:none;transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s}
-#restDone.on-resume.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+#restDone.on-resume{bottom:calc(var(--tb-h,64px) + 8px);width:calc(100% - 28px);max-width:492px;min-height:var(--rs-h,64px);border-radius:14px;padding:9px 12px 9px 16px;transform:translate(-50%,0) scale(.96);opacity:0;pointer-events:none;transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s}
+#restDone.on-resume.show{transform:translate(-50%,0);opacity:1;visibility:visible;pointer-events:auto}
+#restDone.on-resume .rd-t{font-size:16px}#restDone.on-resume .rd-s{font-size:12px;margin-top:1px}#restDone.on-resume .rd-go{padding:7px 14px;font-size:14px;border-radius:999px}
 .resume{transition:opacity .2s,transform .28s cubic-bezier(.2,.8,.2,1)}
 body.rd-on .resume{opacity:0;transform:translateX(-50%) scale(.96);pointer-events:none}
 @media (prefers-reduced-motion: reduce){#restDone{transition:none}#restDone.show{animation:none}}

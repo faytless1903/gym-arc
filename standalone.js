@@ -602,7 +602,7 @@
     try{
       if(kind === "rest"){
         if(!S.active) return;
-        try{ closeModal(); }catch(_){}
+        try{ closeModal(); }catch(_){} try{ hideRestDone(); }catch(_){}
         var sh = document.getElementById("exsheet");
         if(!(sh && sh.classList.contains("open"))) resumeWorkout();
         setTimeout(function(){ var r = document.querySelector("#exsheet .set-r.active") || document.querySelector("#exsheet .set-r:not(.done):not(.warm)"); if(r) r.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);

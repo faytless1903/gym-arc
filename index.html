@@ -281,6 +281,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .gh-copy{display:flex;gap:8px;align-items:center;background:var(--tile);border-radius:12px;padding:8px 8px 8px 12px}.gh-copy code{flex:1;min-width:0;font-size:12px;word-break:break-all;color:var(--ink)}
 .gh-steps{padding-left:20px;margin:4px 0 14px;color:var(--muted);font-size:14px;line-height:1.45}.gh-steps li{margin-bottom:6px}.gh-steps code{font-size:12px;background:var(--tile);border-radius:6px;padding:1px 5px}
 .coach-btn{position:fixed;top:calc(var(--safe-t) + 14px);right:max(16px, calc(50% - 244px));z-index:6;width:42px;height:42px;border-radius:50%;background:var(--surface);color:var(--accent);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.coach-btn{transition:opacity .2s,transform .2s}body.coach-hide .coach-btn{opacity:0;transform:translateY(-8px) scale(.9);pointer-events:none}
 .coach-btn svg{width:22px;height:22px}body.gear-on .coach-btn{right:calc(max(16px, calc(50% - 244px)) + 52px)}body.ob-mode .coach-btn{display:none}
 .fd-more{display:block;margin:12px auto 0;background:none;color:var(--accent);font-weight:650;font-size:14px;padding:4px 8px}
 .nd{display:flex;flex-direction:column;gap:12px}.nd-h{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;color:var(--muted);margin-bottom:6px}.nd-h b{color:var(--ink);font-size:15px}.nd-h small{color:var(--muted);font-weight:600}
@@ -344,6 +345,8 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .kw-b i{display:block;width:70%;max-width:30px;border-radius:6px 6px 3px 3px;background:var(--tile)}
 .kw-b i.ok{background:var(--good)}.kw-b i.over{background:var(--bad)}
 .kw-b i.td{opacity:.45}
+.kw-b i.none{background:var(--line);border-radius:2px}
+.kw-b i.cap{border-radius:3px;-webkit-mask:linear-gradient(to bottom,transparent 0 5px,#000 5px 8px,transparent 8px 11px,#000 11px)}
 .kw-c span{font-size:11px;font-weight:600;color:var(--muted)}
 .kw-c.sel span{color:var(--ink);font-weight:800}
 .kw-n{font-size:13px;color:var(--muted);margin:10px 0 0}
@@ -1809,7 +1812,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
     <div class="h-sub">${WEEKDAYS[now.getDay()]}, ${now.toLocaleDateString("de-DE",{day:"numeric",month:"long"})}</div>
     <div class="plan-card">
       <div class="plan-row">
-        <div><div class="plan-name">${PLAN.name}</div><div class="plan-meta">Woche ${weekNo()}, ${Math.min(doneThisWeek,99)} von ${PLAN.days.length} Trainings</div></div>
+        <div><div class="plan-name">${PLAN.name}</div><div class="plan-meta">Woche ${weekNo()} · ${Math.min(doneThisWeek,99)}/${PLAN.days.length} Trainings</div></div>
         <button class="pill-btn hist-open" data-act="tab" data-tab="history">${IC.clock}Verlauf</button>
       </div>
       <div class="week-bar">${week}</div>
@@ -1897,6 +1900,7 @@ function pillSync(){
     const b=w.firstChild; if(b._h!==html){ b.innerHTML=html; b._h=html; }
   });
 }
+(()=>{ let ly=0; addEventListener("scroll", ()=>{ const y=scrollY; if(y<40) document.body.classList.remove("coach-hide"); else if(y>ly+6) document.body.classList.add("coach-hide"); else if(y<ly-6) document.body.classList.remove("coach-hide"); ly=y; }, {passive:true}); })();
 function tbH(){ try{ const t=document.querySelector(".tabbar"); if(t && t.offsetHeight) document.documentElement.style.setProperty("--tb-h", t.offsetHeight+"px"); }catch(_){} }
 addEventListener("resize", ()=>setTimeout(tbH,50));
 function renderResume(){
@@ -3791,13 +3795,13 @@ function kcalWeek(k, T){
   for(let i=6;i>=0;i--){ const d=new Date(end); d.setDate(d.getDate()-i); const dk=todayKey(d); const has=MEALS.some(([m])=>(((S.food||{})[dk]||{})[m]||[]).length); days.push({dk, d, v:has?Math.round(dayTotals(dk).kcal):null, today:dk===todayKey()}); }
   const full=days.filter(x=>x.v!=null && !x.today);
   const avg=full.length? Math.round(full.reduce((a,x)=>a+x.v,0)/full.length) : null;
-  const max=Math.max(T.kcal*1.25, ...days.map(x=>x.v||0)); const H=96, y=v=>H-v/max*H;
-  const bars=days.map(x=>{ const over=x.v!=null && x.v>T.kcal; const h=x.v? Math.max(3, x.v/max*H) : 0;
-    return `<div class="kw-c ${x.dk===k?"sel":""}" data-act="foodDayGo" data-k="${x.dk}"><div class="kw-b"><i class="${x.v==null?"":over?"over":"ok"} ${x.today?"td":""}" style="height:${h}px"></i></div><span>${x.d.toLocaleDateString("de-DE",{weekday:"short"}).replace(".","").slice(0,2)}</span></div>`; }).join("");
+  const max=T.kcal*1.3; const H=96;
+  const bars=days.map(x=>{ const over=x.v!=null && x.v>T.kcal; const h=x.v? Math.min(H, Math.max(3, x.v/max*H)) : 3; const cap=x.v!=null && x.v>max;
+    return `<div class="kw-c ${x.dk===k?"sel":""}" data-act="foodDayGo" data-k="${x.dk}"><div class="kw-b"><i class="${x.v==null?"none":over?"over":"ok"} ${x.today?"td":""} ${cap?"cap":""}" style="height:${h}px"></i></div><span>${x.d.toLocaleDateString("de-DE",{weekday:"short"}).replace(".","").slice(0,2)}</span></div>`; }).join("");
   const diff = avg!=null ? avg-T.kcal : null;
   return `<div class="pcard kw"><div class="kw-h"><b>Kalorien-Woche</b>${avg!=null?`<span>Ø <b class="${diff>0?"bad":"good"}">${avg.toLocaleString("de-DE")}</b> kcal${full.length<6?` · ${full.length} ${full.length===1?"Tag":"Tage"}`:""}</span>`:`<span>noch keine vollen Tage</span>`}</div>
     <div class="kw-g"><div class="kw-t" style="bottom:${(T.kcal/max*H)+18}px"><em>${T.kcal.toLocaleString("de-DE")}</em></div>${bars}</div>
-    ${avg!=null?`<p class="kw-n">${diff>0?`Im Schnitt ${diff.toLocaleString("de-DE")} kcal über dem Ziel`:`Im Schnitt ${(-diff).toLocaleString("de-DE")} kcal unter dem Ziel – passt für den Cut`}${days.some(x=>x.today&&x.v!=null)?" (heute zählt noch nicht mit)":""}.</p>`:""}</div>`;
+    ${avg!=null?`<p class="kw-n">${diff>0?`Im Schnitt ${diff.toLocaleString("de-DE")} kcal über dem Ziel`:`Im Schnitt ${(-diff).toLocaleString("de-DE")} kcal unter dem Ziel – passt für den Cut`}.</p>`:""}</div>`;
 }
 function proteinPool(){
   const m=new Map(); const add=it=>{ if(!it || !it.name) return; const p=+it.p||0, k=+it.kcal||0; if(p<8 || k<=0 || p*4/k<0.4) return; m.set(it.name.toLowerCase(), pickVals(it)); };
@@ -3842,7 +3846,7 @@ function renderTracking(){
     ${isToday && T ? proteinGapCard(t, T) : ""}
     <input type="file" id="foodPhoto" accept="image/*" style="display:none">
     <div class="fd-meals">${MEALS.map(([m,l])=>{ const items=d[m]||[]; const mk=items.reduce((a,i)=>a+(+i.kcal||0),0);
-      return `<button class="fd-meal" data-act="mealOpen" data-m="${m}"><span class="fd-ic fd-svg" aria-hidden="true">${svgIc(MEAL_ICON[m])}</span><b>${l}</b><em>${mk?Math.round(mk).toLocaleString("de-DE"):"–"}</em><span class="fd-k">${mk?"kcal":"noch nichts"}${items.length>1?` · ${items.length} Einträge`:""}</span></button>`; }).join("")}</div>
+      return `<button class="fd-meal" data-act="mealOpen" data-m="${m}"><span class="fd-ic fd-svg" aria-hidden="true">${svgIc(MEAL_ICON[m])}</span><b>${l}</b><em>${mk?Math.round(mk).toLocaleString("de-DE"):"–"}</em><span class="fd-k">${mk?"kcal":"&nbsp;"}${items.length>1?` · ${items.length} Einträge`:""}</span></button>`; }).join("")}</div>
     ${T ? `<div style="margin-top:12px">${kcalWeek(k, T)}</div>` : ""}`;
 }
 

@@ -2034,6 +2034,10 @@ function setDelta(a,b){
   if(Math.abs(ka-kb)>0.01){ const d=ka-kb; return {cls:d>0?"up":"down", txt:(d>0?"+":"")+fmtNum(Math.round(d*100)/100)+" kg"}; }
   const d=(a.reps||0)-(b.reps||0); return {cls:d>0?"up":d<0?"down":"same", txt:d? (d>0?"+":"")+d : "="};
 }
+/* Beim Bearbeiten im Verlauf: Δ-Spalte sofort mitrechnen */
+document.addEventListener("input", ev=>{ const t=ev.target; if(!t.dataset || !t.dataset.he) return; const row=t.closest(".cmp-r"); if(!row || !row.dataset.pv) return;
+  const [pk,pr]=row.dataset.pv.split("|").map(Number); const ins=row.querySelectorAll("input[data-he]"); if(ins.length<2) return;
+  const dl=setDelta({kg:num(ins[0].value)||0, reps:num(ins[1].value)||0}, {kg:pk, reps:pr}); const d=row.querySelector(".cmp-d"); if(d){ d.className="cmp-d "+dl.cls; d.textContent=dl.txt; } });
 function cmpTable(sets, prev, ed){
   const P = prev ? prev.sets : [];
   const n = Math.max(sets.length, P.length);
@@ -2041,7 +2045,7 @@ function cmpTable(sets, prev, ed){
   let rows="";
   for(let i=0;i<n;i++){
     const a=sets[i], b=P[i], dl=setDelta(a,b);
-    rows += `<div class="cmp-r"><span class="cmp-n">${i+1}</span><span class="cmp-p">${b?setTxt(b):"–"}</span><span class="cmp-c">${a && ed ? `<span class="he-in"><input inputmode="decimal" data-he="${ed.ei}:${ed.si[i]}:kg" value="${a.kg!=null?fmtNum(a.kg):""}" aria-label="Gewicht Satz ${i+1}"><i>×</i><input inputmode="numeric" data-he="${ed.ei}:${ed.si[i]}:reps" value="${a.reps??""}" aria-label="Wiederholungen Satz ${i+1}"></span>` : a?setTxt(a):"–"}</span><span class="cmp-d ${dl.cls}">${prev?dl.txt:""}</span></div>`;
+    rows += `<div class="cmp-r"${ed && a && b ? ` data-pv="${num(b.kg)||0}|${num(b.reps)||0}"`:""}><span class="cmp-n">${i+1}</span><span class="cmp-p">${b?setTxt(b):"–"}</span><span class="cmp-c">${a && ed ? `<span class="he-in"><input inputmode="decimal" data-he="${ed.ei}:${ed.si[i]}:kg" value="${a.kg!=null?fmtNum(a.kg):""}" aria-label="Gewicht Satz ${i+1}"><i>×</i><input inputmode="numeric" data-he="${ed.ei}:${ed.si[i]}:reps" value="${a.reps??""}" aria-label="Wiederholungen Satz ${i+1}"></span>` : a?setTxt(a):"–"}</span><span class="cmp-d ${dl.cls}">${prev?dl.txt:""}</span></div>`;
   }
   return `<div class="cmp">
     <div class="cmp-r cmp-h"><span class="cmp-n">#</span><span class="cmp-p">${prev?"Davor · "+pd:""}</span><span class="cmp-c">Heute</span><span class="cmp-d">${prev?"Δ":""}</span></div>

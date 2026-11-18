@@ -230,6 +230,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .nu-tkg{cursor:default}.nu-tkg small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px}
 .nu-tkg b{font-size:22px;font-weight:750;color:var(--ink)}
 .nu-seg3 button{font-size:13px}
+.bform.done{opacity:.5;pointer-events:none}.bform.done button{white-space:nowrap}
 .bnow{display:flex;align-items:center;justify-content:space-between;background:var(--tile);border-radius:var(--r-md);padding:12px 14px;margin-top:4px}
 .bnow span{display:block;font-size:12px;color:var(--muted)}
 .bnow b{font-size:24px;font-weight:850;font-stretch:var(--cond);font-variant-numeric:tabular-nums}
@@ -2925,8 +2926,8 @@ function renderBody(){
   }
   return `<div class="pcard">
     <div class="pc-h"><h3>Körpergewicht</h3></div>
-    ${today && !UI.bodyEdit ? `<div class="bnow"><div><span>Heute</span><b>${fmtNum(today.kg)} kg</b></div><button class="link sm" data-act="bodyEdit">Ändern</button></div>` : `<form class="bform" data-form="body">
-      <input type="text" inputmode="decimal" id="bodyIn" placeholder="${today?fmtNum(today.kg):"z. B. 82,4"}" aria-label="Gewicht heute in kg">
+    ${today ? `<div class="bform done" aria-disabled="true"><input type="text" value="${fmtNum(today.kg)}" disabled aria-label="Gewicht heute (erfasst)"><span>kg</span><button type="button" disabled>✓ Heute erfasst</button></div>` : `<form class="bform" data-form="body">
+      <input type="text" inputmode="decimal" id="bodyIn" placeholder="z. B. 82,4" aria-label="Gewicht heute in kg">
       <span>kg</span><button type="submit">Erfassen</button>
     </form>`}
     ${stats}
@@ -5862,10 +5863,11 @@ document.addEventListener("submit", ev=>{
   }
   if(ev.target.dataset.form!=="body") return;
   ev.preventDefault();
+  if((S.body||[]).some(x=>x.d===todayKey())){ toast("Heute ist schon erfasst – morgen wieder"); return; }   // nur einmal täglich
   const v=num($("bodyIn").value);
   if(v==null || v<30 || v>300){ toast("Bitte Gewicht in kg eingeben, z. B. 82,4"); return; }
   const k=todayKey(); S.body=(S.body||[]).filter(x=>x.d!==k); S.body.push({d:k, kg:Math.round(v*10)/10});
-  UI.bodyEdit=false; saveBody(); renderHome(); toast(fmtNum(Math.round(v*10)/10)+" kg eingetragen");
+  UI.bodyEdit=false; try{ kpHide(false); }catch(_){ } try{ document.activeElement && document.activeElement.blur(); }catch(_){ } saveBody(); renderHome(); toast(fmtNum(Math.round(v*10)/10)+" kg eingetragen");
 });
 // Diagramme: mit dem Finger seitlich abfahren -> Linie + Wert des nächsten Punkts
 let scrub=null;

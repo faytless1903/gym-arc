@@ -922,7 +922,7 @@ body.m-lock{overflow:hidden}
 .re-imp{display:flex;gap:8px;margin:0 0 12px}.re-imp input{flex:1;min-width:0;background:var(--tile);border:0;border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;color:var(--ink)}.re-imp .m-btn{width:auto;margin:0;padding:0 16px;flex-shrink:0}
 .he-in{display:inline-flex;align-items:center;gap:3px}.he-in i{font-style:normal;color:var(--muted)}
 .he-in input{width:46px;min-width:0;background:color-mix(in srgb,var(--accent) 10%,var(--tile));border:0;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 45%,transparent);border-radius:8px;padding:5px 2px;font:inherit;font-weight:700;text-align:center;color:var(--ink);font-variant-numeric:tabular-nums}
-.he-in input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
+.he-in input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}.he-in input{caret-color:transparent}
 body.kp-open #histsheet .sheet-scroll{padding-bottom:340px}
 #histsheet.editing .grab{visibility:hidden}#histsheet.editing .sheet-top{touch-action:none}
 .he-g{display:grid;grid-template-columns:28px 1fr 1fr;gap:6px 8px;align-items:center}.he-g>span{font-size:12px;font-weight:700;color:var(--muted);text-align:center}.he-g em{font-style:normal;color:var(--muted);font-weight:700;text-align:center}
@@ -6107,7 +6107,16 @@ function kpShow(inp){ if(KP.refocus && KP.inp===inp) return; kpBuild(); const k=
   KP.inp=inp; KP.key=k; KP.fresh=!same; kpSync(); if(KP.txFresh!==inp) ktFreshOff();
   const txt=inp.dataset.kpmode==="text"; KP.el.classList.toggle("txt", txt); if(txt){ KP.fresh=false; KP.lay="abc"; try{ if(inp.selectionStart==null || (!same && inp.selectionStart===0 && inp.value)) inp.setSelectionRange(inp.value.length, inp.value.length); }catch(_){} KP.shift=ktAutoShift(inp); ktRender(); } KP.el.classList.add("open"); document.body.classList.add("kp-open"); requestAnimationFrame(()=>{ try{ document.documentElement.style.setProperty("--kp-h", Math.round(KP.el.getBoundingClientRect().height)+"px"); }catch(_){} });
   if(txt && !same && inp.classList.contains("cp-n") && inp.value){ KP.txFresh=inp; inp.classList.add("kt-fresh"); KP.txT=Date.now(); try{ inp.setSelectionRange(inp.value.length, inp.value.length); }catch(_){} KP.shift=true; ktRender(); }
-  setTimeout(()=>{ try{ inp.scrollIntoView({block:"center", behavior:"smooth"}); }catch(_){ } },60); }
+  setTimeout(()=>kpReveal(inp),60); }
+/* Feld über dem Ziffernfeld sichtbar machen – nur die Scroll-Liste bewegen, nie das Fenster/Sheet selbst
+   (scrollIntoView verschiebt auf dem iPhone sonst das ganze Sheet samt Kopfzeile und den Cursor) */
+function kpReveal(inp){ try{
+  const sc=inp.closest(".sheet-scroll"); if(!sc){ inp.scrollIntoView({block:"center", behavior:"smooth"}); return; }
+  const sh=sc.closest(".sheet"); if(sh && sh.scrollTop) sh.scrollTop=0; if(document.scrollingElement && document.scrollingElement.scrollTop) document.scrollingElement.scrollTop=0;
+  const r=inp.getBoundingClientRect(), s=sc.getBoundingClientRect(), kh=KP.el && KP.el.classList.contains("open") ? KP.el.getBoundingClientRect().height : 0;
+  const top=s.top, bottom=Math.min(s.bottom, innerHeight-kh), mid=(top+bottom)/2;
+  if(r.top<top+8 || r.bottom>bottom-8) sc.scrollBy({top:r.top+r.height/2-mid, behavior:"smooth"});
+}catch(_){ } }
 document.addEventListener("click", ev=>{ if(KP.txFresh && ev.target===KP.txFresh && Date.now()-(KP.txT||0)>350) ktFreshOff(); }, true);
 function kpHide(blur){ if(!KP.el) return; ktFreshOff(); const inp=KP.inp; KP.inp=null; KP.key=null; KP.el.classList.remove("open"); document.body.classList.remove("kp-open");
   if(blur && inp){ inp.blur(); inp.dispatchEvent(new Event("change",{bubbles:true})); const f=inp.closest("form"); if(f && f.dataset.form==="body" && inp.value) f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(new Event("submit",{cancelable:true,bubbles:true})); } }

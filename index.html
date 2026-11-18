@@ -915,6 +915,7 @@ body.m-lock{overflow:hidden}
 .ck-card .fd-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}.ck-t{flex:1;min-width:0}.ck-t b{display:block;font-size:16px;line-height:1.25}.ck-t span{font-size:12px;color:var(--muted)}
 .ck-card em{font-style:normal;text-align:right;font-weight:850;font-stretch:var(--cond);font-size:22px;line-height:1}.ck-card em small{display:block;font-size:11px;font-weight:600;color:var(--muted);font-stretch:100%}
 .ck-how{margin:6px 0 14px;padding-left:20px;display:grid;gap:8px;font-size:15px;line-height:1.45;color:var(--ink)}
+.re-imp{display:flex;gap:8px;margin:0 0 12px}.re-imp input{flex:1;min-width:0;background:var(--tile);border:0;border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;color:var(--ink)}.re-imp .m-btn{width:auto;margin:0;padding:0 16px;flex-shrink:0}
 .ck-ing2{display:flex;flex-direction:column;margin:0 0 14px;background:var(--tile);border-radius:14px;padding:2px 14px}
 .ck-ing2 div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:15px;line-height:1.3;padding:10px 0;border-bottom:1px solid var(--line);min-width:0}.ck-ing2 div:last-child{border-bottom:0}.ck-ing2 div>b{order:2;font-weight:650;color:var(--muted)}.ck-ing2 div>span{order:1}
 .ck-ing2 b{font-weight:700;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}.ck-ing2 b:empty{display:none}
@@ -3989,6 +3990,7 @@ function recEditor(r, msg){
   modal(`<h3>${KN?(R.id?"Kantinen-Gericht":"Neues Kantinen-Gericht"):FV?(R.id?"Favorit bearbeiten":"Neuer Favorit"):(R.id?"Rezept bearbeiten":"Neues Rezept")}</h3>
     ${FV?favSeg("ing", R.id):""}
     ${msg?`<p class="nu-hint ${/fehl|nicht/.test(msg)?"warn":""}">${esc(msg)}</p>`:""}
+    ${!R.id && !FV && !KN && window.gymArcRecipe && !L.length && !(R.ingredients||"").trim() ? `<div class="re-imp"><input id="re_url" type="url" inputmode="url" placeholder="Rezept-Link einfügen" autocomplete="off" enterkeyhint="go"><button class="m-btn" data-act="recImport">Importieren</button></div>`:""}
     <label class="nu-f" style="margin-bottom:12px"><span>Name</span><div><input id="re_name" value="${esc(R.name)}" placeholder="${KN?"z. B. Gebratener Leberkäse mit Kartoffelspalten":FV?"z. B. Kaffee mit Milch (Arbeit)":"z. B. Chili con Carne"}" style="font-size:18px"></div></label>
     ${recLabBox(R)}
     ${(R.ingredients||"").trim()?`<label class="nu-f fd-q" style="margin-bottom:8px"><span>${legacy?"Zutaten werden im BLS zugeordnet …":"Noch nicht zugeordnet – nicht eingerechnet"}</span><div><textarea id="re_ing" rows="${legacy?4:2}">${esc(R.ingredients)}</textarea></div></label>
@@ -4001,6 +4003,30 @@ function recEditor(r, msg){
     ${R.id?`<button class="m-btn red" data-act="recDel">${KN?"Gericht löschen":FV?"Favorit löschen":"Rezept löschen"}</button>`:""}`);
   if(legacy){ if(R.id && recList().some(x=>x.id===R.id)){ const id=R.id; recMigrate(id).then(cur=>{ if(UI.recEdit!==R) return; if(cur && cur.lab && cur.lab.length) recEditor(cur, `${cur.lab.length} Zutaten im BLS zugeordnet und gespeichert. Gramm bei Bedarf prüfen.`); else recConvert(R, true); }); }
     else recConvert(R, true); }
+}
+/* Rezept per Link importieren: strukturierte Rezeptdaten der Seite, sonst Seitentext → Claude */
+async function recImport(){
+  const el=$("re_url"); const url=(el&&el.value||"").trim(); if(!url){ toast("Bitte einen Link einfügen"); return; }
+  const R=recRead();
+  modal(`<h3>Rezept wird geladen …</h3><p>${esc(url.replace(/^https?:\/\/(www\.)?/,"").slice(0,60))}</p>`);
+  let d=null;
+  try{ d=await window.gymArcRecipe.load(url); }catch(e){ if(UI.recEdit!==R) return; recEditor(R, "Import fehlgeschlagen: "+((e&&e.message)||"Seite nicht erreichbar")); return; }
+  if(UI.recEdit!==R) return;
+  if(d && d.source==="text"){
+    let sample=null; try{ sample = window.claude && claude.use ? await claude.use("sample") : null; }catch(_){}
+    if(!sample){ recEditor(R, "Auf der Seite wurde kein Rezept erkannt."); return; }
+    try{
+      const x=await sampleJSON(sample, `Lies aus diesem Webseiten-Text das Rezept aus (Titel der Seite: ${d.title||"–"}).\n"""${d.text}"""\nAntworte NUR mit JSON: {"name":"deutscher Rezeptname","portionen":Zahl oder null,"zutaten":["Menge Einheit Zutat", …],"schritte":["kurzer Schritt", …]}. Zutaten und Schritte auf Deutsch, Mengen exakt übernehmen. Wenn kein Rezept enthalten ist: {"zutaten":[]}`, {modelTier:"quick"});
+      d={name:x&&x.name, servings:x&&x.portionen, ingredients:(x&&Array.isArray(x.zutaten)?x.zutaten:[]).map(String), steps:(x&&Array.isArray(x.schritte)?x.schritte:[]).map(String), url:d.url};
+    }catch(_){ recEditor(R, "Rezept konnte nicht gelesen werden."); return; }
+    if(UI.recEdit!==R) return;
+  }
+  if(!d || !(d.ingredients||[]).length){ recEditor(R, "Auf der Seite wurde kein Rezept erkannt."); return; }
+  if(!R.name) R.name=String(d.name||"").slice(0,60);
+  if(d.servings>0) R.servings=Math.round(d.servings*10)/10;
+  R.ingredients=d.ingredients.join("\n");
+  R.howto={url:d.url||url, text:(d.steps||[]).join("\n")};
+  recEditor(R);
 }
 function recTot(R){ const L=R.lab||[]; return L.length ? compSum(L) : {kcal:Math.round(+R.kcal||0), p:Math.round(+R.p||0), c:Math.round(+R.c||0), f:Math.round(+R.f||0)}; }
 // Einheitliche Nährwert-Zeile für alle Editoren: Label · kcal · E/K/F
@@ -4029,7 +4055,7 @@ async function recConvert(R, auto){
   if(!auto) recRead(); const lines=(R.ingredients||"").split(/\n+/).map(t=>t.trim()).filter(Boolean); if(!lines.length) return;
   if(!auto) modal(`<h3>Zutaten werden im BLS gesucht …</h3><p>${lines.length} Zutaten</p>`);
   let out={rows:[], rest:lines}; try{ out=await ingResolve(lines); }catch(_){ }
-  if(UI.recEdit!==R) return; if(auto) recRead();
+  if(UI.recEdit!==R || !$("modal").classList.contains("open")) return; if(auto) recRead();
   R.lab=(R.lab||[]).concat(out.rows); R.ingredients=out.rest.join("\n"); delete R.base;
   recEditor(R, out.rows.length ? `${out.rows.length} Zutaten im BLS zugeordnet${out.rest.length?` – ${out.rest.length} noch offen`:""}. Bitte Gramm kurz prüfen.` : "Zuordnung hat nicht geklappt – versuch es nochmal oder füge die Zutaten einzeln hinzu.");
 }
@@ -5771,6 +5797,7 @@ document.addEventListener("click", ev=>{
     case "fqAdd": { const it=(UI.fqList||[])[+b.dataset.i]; if(!it) break; const k=UI.foodDay||todayKey(); foodDay(k)[foodMeal].push({...it, t:Date.now()}); saveFoodDay(k); closeModal(); keepScrollHome(renderHome); toast(it.name+" eingetragen"); if(UI.mealOpen===foodMeal) mealOpen(foodMeal); break; }
     case "pgAdd": { const pl=UI.pgPlan; if(!pl) break; const k=todayKey(), d=foodDay(k); pl.items.forEach(it=>d.snack.push({...it, t:Date.now()})); saveFoodDay(k); keepScrollHome(renderHome); toast("Als Snack eingetragen"); break; }
     case "recNew": recEditor(null); break;
+    case "recImport": recImport(); break;
     case "ckTab": UI.ckTab=b.dataset.t; keepScrollHome(renderHome); break;
     case "favEdit": favOpen(b.dataset.id||null); break;
     case "kanAdd": kanAdd(b.dataset.id); break;

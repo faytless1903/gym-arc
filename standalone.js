@@ -384,9 +384,10 @@
     ev.preventDefault(); ev.stopPropagation();
     var k = b.getAttribute("data-gpush");
     if(k === "pToggle"){ if(pushOn()) pushDisable(); else pushEnable(); }
-    else if(k === "wToggle"){ if(!pushOn()) return; try{ localStorage.setItem(WK, weighOn() ? "0" : "1"); }catch(_){} weighSync(true); rerender(); }
+    else if(k === "wToggle"){ if(!pushOn()) return; try{ localStorage.setItem(WK, weighOn() ? "0" : "1"); }catch(_){} weighSync(weighOn() ? "Erinnerung um 6:55 an" : "Erinnerung um 6:55 aus"); rerender(); }
+    else if(k === "eToggle"){ if(!pushOn()) return; try{ localStorage.setItem(EK, protOn() ? "0" : "1"); }catch(_){} weighSync(protOn() ? "Eiweiß-Erinnerung um 20:00 an" : "Eiweiß-Erinnerung um 20:00 aus"); rerender(); }
     else if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
-    else if(k === "wOn" || k === "wOff"){ try{ localStorage.setItem(WK, k === "wOn" ? "1" : "0"); }catch(_){} weighSync(true); rerender(); }
+    else if(k === "wOn" || k === "wOff"){ try{ localStorage.setItem(WK, k === "wOn" ? "1" : "0"); }catch(_){} weighSync(false); rerender(); }
   }, true);
   /* Claude-Verbrauch im laufenden Monat (geschätzt aus den Tokens, die Anthropic bei jeder Antwort meldet) */
   var UK = "ga-usage";
@@ -453,19 +454,26 @@
   /* Wiege-Erinnerung um 6:55 (Server schickt sie nur, wenn heute noch kein Gewicht eingetragen ist) */
   var WK = "ga-weigh";
   function weighOn(){ try{ return localStorage.getItem(WK) !== "0"; }catch(_){ return true; } }
+  var EK = "ga-eprot";
+  function protOn(){ try{ return localStorage.getItem(EK) !== "0"; }catch(_){ return true; } }
+  function pGoal(){ try{ var T = typeof nuTargets === "function" ? nuTargets() : null; return T && T.p > 0 ? Math.round(T.p) : 0; }catch(_){ return 0; } }
   function weighSync(show){
-    callFn("push", { action: "daily", weigh: weighOn() })
-      .then(function(){ try{ localStorage.setItem(WK + "-sync", "1"); }catch(_){} if(show) toast2(weighOn() ? "Erinnerung um 6:55 an" : "Erinnerung um 6:55 aus"); })
+    var g = pGoal();
+    callFn("push", { action: "daily", weigh: weighOn(), protein: protOn(), pGoal: g })
+      .then(function(){ try{ localStorage.setItem(WK + "-sync", "2"); localStorage.setItem(EK + "-goal", String(g)); }catch(_){} if(show) toast2(show); })
       .catch(function(){ if(show) toast2("Nicht gespeichert – keine Verbindung?"); });
   }
-  setTimeout(function(){ try{ if(sess && pushOn() && localStorage.getItem(WK + "-sync") !== "1") weighSync(false); }catch(_){} }, 4000);
+  setTimeout(function(){ try{ if(sess && pushOn() && localStorage.getItem(WK + "-sync") !== "2") weighSync(false); }catch(_){} }, 4000);
+  // Eiweißziel geändert (Gewicht, Cut, Angaben) → Server kennt das neue Ziel für die Erinnerung um 20:00
+  setInterval(function(){ try{ if(sess && pushOn() && protOn() && String(pGoal()) !== (localStorage.getItem(EK + "-goal") || "")) weighSync(false); }catch(_){} }, 60000);
   function pushHTML(){
     var h = '<div class="fv-l" style="margin-top:18px">Mitteilungen</div><div class="gs-card">';
     if(!pushSupported() || !installed()) return h + '<div class="gs-row dis"><span>Nur in der App vom Home-Bildschirm</span></div></div>';
     if(Notification.permission === "denied") return h + '<div class="gs-row dis"><span>In den iPhone-Einstellungen blockiert</span></div></div>';
-    var on = pushOn(), w = on && weighOn();
+    var on = pushOn(), w = on && weighOn(), e = on && protOn();
     return h + '<div class="gs-row"><span>Satzpause vorbei' + (on ? ' <button class="gs-test" data-gpush="test">Testen</button>' : '') + '</span><button class="gs-sw' + (on ? " on" : "") + '" data-gpush="pToggle" role="switch" aria-checked="' + on + '" aria-label="Satzpause vorbei"></button></div>' +
-      '<div class="gs-row' + (on ? "" : " dis") + '"><span>Wiegen um 6:55</span><button class="gs-sw' + (w ? " on" : "") + '" data-gpush="wToggle" role="switch" aria-checked="' + w + '" aria-label="Wiegen um 6:55"' + (on ? "" : " disabled") + '></button></div></div>';
+      '<div class="gs-row' + (on ? "" : " dis") + '"><span>Wiegen um 6:55</span><button class="gs-sw' + (w ? " on" : "") + '" data-gpush="wToggle" role="switch" aria-checked="' + w + '" aria-label="Wiegen um 6:55"' + (on ? "" : " disabled") + '></button></div>' +
+      '<div class="gs-row' + (on ? "" : " dis") + '"><span>Eiweiß um 20:00</span><button class="gs-sw' + (e ? " on" : "") + '" data-gpush="eToggle" role="switch" aria-checked="' + e + '" aria-label="Eiweiß-Erinnerung um 20:00"' + (on ? "" : " disabled") + '></button></div></div>';
   }
 
   /* ---------- Fortschrittsfotos (privat in Supabase Storage) + Vergleich durch Claude ---------- */
@@ -589,6 +597,7 @@
     if(k === "view") phView(p); else if(k === "del") phDelete(p); else if(k === "cmp") phCompareDialog(); else if(k === "pick") phPick(p); else if(k === "run") phRun();
   }, true);
   document.addEventListener("change", function(ev){ if(ev.target && ev.target.id === "gphIn"){ var f = ev.target.files && ev.target.files[0]; ev.target.value = ""; phUpload(f); } });
+  window.gymArcRecipe = { load: function(url){ return callFn("recipe", { url: url }); } };
   window.gymArcPhotos = { upload: phUpload, html: function(){
     if(!sess) return "";
     setTimeout(phFill, 0);

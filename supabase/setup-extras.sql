@@ -43,3 +43,14 @@ $$);
 insert into public.docs_backup (day, user_id, id, data, updated_at)
   select current_date, user_id, id, data, updated_at from public.docs
   on conflict do nothing;
+
+-- Eiweiß-Erinnerung um 20:00 (Berlin)
+alter table public.push_daily add column if not exists protein boolean not null default false;
+alter table public.push_daily add column if not exists p_goal integer not null default 0;
+select cron.schedule('gym-arc-evening', '0 18,19 * * *', $$
+  select net.http_post(
+    url     := 'https://deutodqxafjzrsnqqszg.supabase.co/functions/v1/push',
+    body    := '{"action":"evening"}'::jsonb,
+    headers := '{"Content-Type":"application/json"}'::jsonb
+  );
+$$);

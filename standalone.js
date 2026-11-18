@@ -517,8 +517,8 @@
     var n = await phNotes(); var last = L[0] && n.notes[L[0].name];
     var nt = document.getElementById("gphNote"); if(nt) nt.innerHTML = last ? "<b>Letzter Vergleich (" + deDate(L[0].day) + " vs. " + deDate(last.vs) + "):</b> " + esc2(last.kurz || last.text) : "";
   }
-  async function phUpload(file){
-    if(!file || PH.busy) return; PH.busy = true;
+  async function phUpload(file, quiet){
+    if(!file || PH.busy) return; PH.busy = true; var ok = false;
     try{
       toast2("Foto wird gespeichert …");
       var bmp = await createImageBitmap(file); var sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
@@ -526,9 +526,10 @@
       var blob = await new Promise(function(res){ c.toBlob(function(x){ res(x); }, "image/jpeg", .85); });
       var uid = uidOf(); if(!uid) throw E("not_granted", "Nicht angemeldet");
       await stor("POST", "object/photos/" + uid + "/" + today() + "_" + Date.now() + ".jpg", blob, "image/jpeg");
-      PH.list = null; toast2("Foto gespeichert"); phRefresh();
+      PH.list = null; ok = true; if(!quiet) toast2("Foto gespeichert"); phRefresh();
     }catch(e){ toast2("Foto nicht gespeichert: " + (e.message || e.code)); }
     finally{ PH.busy = false; }
+    if(ok && !quiet){ try{ var L = await phList(); if(L.length >= 2) phCompareDialog(); }catch(_){} }
   }
   async function phView(path){
     var L = await phList(); var p = L.find(function(x){ return x.path === path; }); if(!p) return;
@@ -571,8 +572,10 @@
         { images: [await phBlob(b), await phBlob(a)], modelTier: "default" });
       var n2 = await phNotes(); n2.notes[a.name] = { vs: b.day, kurz: String(res.kurz || "").slice(0, 200), text: String(res.text || res.kurz || "").slice(0, 1200), kfa: +res.kfa_jetzt || null, t: Date.now() };
       try{ await phSaveNotes(); }catch(_){}
+      var kj = +res.kfa_jetzt;
+      if(kj > 2 && kj < 60){ try{ var nn = NU(); nn.kfa = Math.round(kj * 10) / 10; nn.kfaSrc = "foto"; nn.kfaRange = null; nn.kfaDate = new Date(a.day + "T12:00:00").getTime(); saveNutri(); }catch(_){} }
       modal('<h3>' + deDate(b.day) + ' → ' + deDate(a.day) + '</h3><p><b>' + esc2(res.kurz || "") + '</b></p><p>' + esc2(res.text || "") + '</p>' +
-        (res.kfa_jetzt ? '<p class="nu-hint">Geschätzter Körperfettanteil jetzt: ca. ' + esc2(res.kfa_jetzt) + ' % (± 3–5 %).</p>' : '') +
+        (kj > 2 && kj < 60 ? '<p class="nu-hint">Körperfett jetzt ca. ' + esc2(Math.round(kj * 10) / 10) + ' % (± 3–5 %) – in Körperzusammensetzung übernommen.</p>' : '') +
         (res.vergleichbar === false ? '<p class="nu-hint warn">Die Fotos sind nur eingeschränkt vergleichbar – nächstes Mal gleiches Licht und gleiche Pose.</p>' : '') +
         '<button class="m-btn pri" data-act="closeModal">Fertig</button>');
       phRefresh();
@@ -586,7 +589,7 @@
     if(k === "view") phView(p); else if(k === "del") phDelete(p); else if(k === "cmp") phCompareDialog(); else if(k === "pick") phPick(p); else if(k === "run") phRun();
   }, true);
   document.addEventListener("change", function(ev){ if(ev.target && ev.target.id === "gphIn"){ var f = ev.target.files && ev.target.files[0]; ev.target.value = ""; phUpload(f); } });
-  window.gymArcPhotos = { html: function(){
+  window.gymArcPhotos = { upload: phUpload, html: function(){
     if(!sess) return "";
     setTimeout(phFill, 0);
     return '<div class="pcard gph"><div class="pc-h"><h3>Fortschrittsfotos</h3><label class="pill-btn" data-gph="add">+ Foto<input type="file" id="gphIn" accept="image/*" style="display:none"></label></div>' +

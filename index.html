@@ -3083,7 +3083,7 @@ function renderComp(){
   if(pts.length>=2){ const a=pts[0]; const dl=leanNow-a.lean, df=fatNow-a.fat;
     delta=`<div class="cmp-d"><div><span>Fettfreie Masse</span><b class="${dl>=-0.3?"good":"bad"}">${sg(dl)} kg</b></div><div><span>Fettmasse</span><b class="${df<=0?"good":"bad"}">${sg(df)} kg</b></div></div>
       <p class="pc-sub" style="margin:8px 0 0">Seit ${new Date(a.d).toLocaleDateString("de-DE")}. ${dl>=-0.3&&df<0?"Du verlierst Fett und hältst deine Muskeln – genau so soll ein Cut laufen.":df<0?"Du verlierst Fett, aber auch etwas fettfreie Masse – Eiweiß und Training hochhalten.":"Noch kein klarer Fettverlust."}</p>`; }
-  else delta=`<p class="pc-sub" style="margin:10px 0 0">Für den Verlauf brauchst du eine zweite Körperfett-Schätzung – am besten alle 2–3 Wochen per Foto unter Ernährung → Ziele, immer bei gleichem Licht.</p>`;
+  else delta=`<p class="pc-sub" style="margin:10px 0 0">Für den Verlauf alle 2–3 Wochen unten ein Fortschrittsfoto hinzufügen und vergleichen – immer bei gleichem Licht.</p>`;
   const pf=Math.max(4,Math.min(60,fatNow/kgNow*100));
   return `<div class="pcard"><div class="pc-h"><h3>Körperzusammensetzung</h3></div>
     <div class="cmp-bar"><i style="width:${100-pf}%"></i><em style="width:${pf}%"></em></div>
@@ -3456,7 +3456,7 @@ function seedRecipesOnce(){
 }
 function kfaLogSync(n){ if(!n || n.kfa==null || !isFinite(+n.kfa)) return; n.kfaLog=n.kfaLog||[]; const L=n.kfaLog, last=L[L.length-1], k=todayKey(n.kfaDate?new Date(n.kfaDate):new Date());
   if(!last){ L.push({d:(n.cut&&n.cut.start&&!n.kfaDate)?n.cut.start:k, kfa:+n.kfa}); return; }
-  if(+last.kfa!==+n.kfa){ if(last.d===todayKey()) last.kfa=+n.kfa; else L.push({d:todayKey(), kfa:+n.kfa}); } }
+  if(+last.kfa!==+n.kfa){ const e=L.find(x=>x.d===k); if(e) e.kfa=+n.kfa; else { L.push({d:k, kfa:+n.kfa}); L.sort((a,b)=>a.d<b.d?-1:1); } } }
 function saveNutri(){ try{ kfaLogSync(S.nutri); }catch(_){} try{ recSyncAll(true); }catch(_){} try{ nutriTomb(S.nutri); }catch(_){} if(S.nutri) S.nutri.upd=Date.now(); saveLocal(); if(DB) cloudSet("nutri", S.nutri); }
 
 /* Echter Kalorienbedarf: gegessene Kalorien (vollständige Tage) und Gewichtstrend der letzten 28 Tage */
@@ -3524,7 +3524,7 @@ function renderNutrition(){
         ${field("kfa","Körperfett",n.kfa,"%")}
       </div>
       <input type="file" id="nuPhoto" accept="image/*" style="display:none">
-      <button class="nu-photo" data-act="nuPhoto">${n.kfa!=null?"Körperfett neu per Foto schätzen":"Körperfett per Foto schätzen"}</button>
+      ${window.gymArcPhotos ? (n.kfa==null?`<button class="nu-photo" data-act="nuPhoto">Ausgangswert per Foto schätzen</button>`:"") : `<button class="nu-photo" data-act="nuPhoto">${n.kfa!=null?"Körperfett neu per Foto schätzen":"Körperfett per Foto schätzen"}</button>`}
       <div class="nu-grid" style="margin-top:10px">${field("targetKfa","Ziel-Körperfett",n.targetKfa,"%")}<div class="nu-f nu-tkg"><span>Zielgewicht</span><div><b>${r&&r.tKg?fmtNum(Math.round(r.tKg*10)/10):"–"}</b><em>kg</em></div><small>bei gleicher Muskelmasse</small></div></div>
       ${r && r.mode==="cut" ? `<div class="nu-l">Tempo</div><div class="nu-seg">${NU_RATE.map(a=>`<button class="${n.rate===a.k?"on":""}" data-act="nuSet" data-k="rate" data-v="${a.k}">${a.l}</button>`).join("")}</div>`:""}
       <div class="nu-grid" style="margin-top:12px">${field("height","Größe",n.height,"cm","1")}${field("age","Alter",n.age,"J.","1")}</div>
@@ -3582,7 +3582,7 @@ async function nuPhotoAnalyze(file){
   let sample=null; try{ sample = window.claude && claude.use ? await claude.use("sample") : null; }catch(_){}
   if(!sample){ toast("Foto-Analyse ist hier nicht verfügbar – trag den Wert bitte selbst ein."); return; }
   try{ const lim = sample.limits ? await sample.limits() : null; if(lim && !lim.images){ toast("Bildanalyse ist hier nicht verfügbar."); return; } }catch(_){}
-  modal(`<h3>Körperfett wird geschätzt …</h3><p>Claude analysiert dein Foto. Das Bild wird nicht gespeichert.</p>`);
+  modal(`<h3>Körperfett wird geschätzt …</h3><p>Claude analysiert dein Foto.${window.gymArcPhotos?" Es wird als erstes Fortschrittsfoto gespeichert.":" Das Bild wird nicht gespeichert."}</p>`);
   try{
     const blob = await nuShrink(file);
     const n=NU();
@@ -3591,6 +3591,7 @@ async function nuPhotoAnalyze(file){
     if(!res || res.kfa==null || !isFinite(+res.kfa)){ modal(`<h3>Keine Schätzung möglich</h3><p>${esc((res&&res.begruendung)||"Auf dem Foto ist kein Oberkörper gut erkennbar.")} Am besten: Oberkörper frei, gutes Licht, von vorn.</p>`); return; }
     n.kfa = Math.round(+res.kfa*10)/10; n.kfaSrc="foto"; n.kfaRange = (isFinite(+res.low)&&isFinite(+res.high))? [Math.round(+res.low), Math.round(+res.high)] : null; n.kfaDate=Date.now();
     saveNutri(); renderHome();
+    try{ if(window.gymArcPhotos && gymArcPhotos.upload) gymArcPhotos.upload(file, true); }catch(_){}
     modal(`<h3>Etwa ${fmtNum(n.kfa)} % Körperfett</h3><p>${n.kfaRange?`Spanne ${n.kfaRange[0]}–${n.kfaRange[1]} %. `:""}${esc(res.begruendung||"")}</p><p>Eine Schätzung per Foto ist ungefähr ± 3–5 % genau. Für den Verlauf zählt vor allem: gleiches Licht, gleiche Pose, gleiche Tageszeit.</p>`);
   }catch(err){
     modal(`<h3>Analyse fehlgeschlagen</h3><p>${err && err.code==="not_granted" ? "Die Analyse wurde nicht erlaubt." : err && err.code==="rate_limited" ? "Gerade zu viele Anfragen – bitte später nochmal." : "Bitte später erneut versuchen oder den Wert selbst eintragen."}</p>`);
@@ -3609,7 +3610,7 @@ document.addEventListener("change", ev=>{
   if(ev.target.id==="nuPhoto"){ const f=ev.target.files && ev.target.files[0]; ev.target.value=""; nuPhotoAnalyze(f); }
   if(ev.target.dataset && ev.target.dataset.nu){ const n=NU(); const k=ev.target.dataset.nu; const v=num(ev.target.value);
     n[k] = (v==null||v==="") ? (["targetKg","targetKfa","kfa"].includes(k)? null : n[k]) : +v;
-    if(k==="kfa") n.kfaSrc = n.kfa==null? null : "manuell";
+    if(k==="kfa"){ n.kfaSrc = n.kfa==null? null : "manuell"; n.kfaDate=Date.now(); }
     saveNutri(); setTimeout(()=>{ const a=document.activeElement && document.activeElement.dataset && document.activeElement.dataset.nu; keepScrollHome(renderHome); if(a){ const el=document.querySelector(`[data-nu="${a}"]`); if(el) el.focus(); } },0); }
 });
 

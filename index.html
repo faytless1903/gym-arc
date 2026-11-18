@@ -2060,8 +2060,7 @@ function histEditSave(id){
   const h=S.history.find(x=>x.id===id); if(!histEditable(h)) return;
   let bad=false;
   document.querySelectorAll("#histsheet [data-he]").forEach(el=>{ const [ei,si,k]=el.dataset.he.split(":"); const s=h.exercises[+ei] && h.exercises[+ei].sets[+si]; if(!s) return;
-    const v=num(el.value); if(k==="reps"){ if(!(v>0)) { bad=true; return; } s.reps=Math.round(v); } else s.kg = v==null||v===""? 0 : Math.max(0, +v); });
-  if(bad){ toast("Wiederholungen müssen größer als 0 sein"); return; }
+    const v=num(el.value); if(k==="reps"){ s.reps = v>0 ? Math.round(v) : 0; } else s.kg = v==null||v===""? 0 : Math.max(0, +v); });
   // Bewertung neu berechnen (gegen die Trainings davor)
   try{ const w=W(h.workoutId); if(w){ const i=S.history.indexOf(h); S.history.splice(i,1);
     const a={workoutId:h.workoutId, ex:{}}; w.exercises.forEach(e=>{ const he=h.exercises.find(x=>x.exId===e.id); a.ex[e.id]={sets:(he?he.sets.filter(s=>!s.warm):[]).map(s=>({done:true, kg:s.kg, reps:s.reps}))}; });

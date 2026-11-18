@@ -920,6 +920,9 @@ body.m-lock{overflow:hidden}
 .ck-card em{font-style:normal;text-align:right;font-weight:850;font-stretch:var(--cond);font-size:22px;line-height:1}.ck-card em small{display:block;font-size:11px;font-weight:600;color:var(--muted);font-stretch:100%}
 .ck-how{margin:6px 0 14px;padding-left:20px;display:grid;gap:8px;font-size:15px;line-height:1.45;color:var(--ink)}
 .re-imp{display:flex;gap:8px;margin:0 0 12px}.re-imp input{flex:1;min-width:0;background:var(--tile);border:0;border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;color:var(--ink)}.re-imp .m-btn{width:auto;margin:0;padding:0 16px;flex-shrink:0}
+.he-in{display:inline-flex;align-items:center;gap:3px}.he-in i{font-style:normal;color:var(--muted)}
+.he-in input{width:46px;min-width:0;background:color-mix(in srgb,var(--accent) 10%,var(--tile));border:0;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 45%,transparent);border-radius:8px;padding:5px 2px;font:inherit;font-weight:700;text-align:center;color:var(--ink);font-variant-numeric:tabular-nums}
+.he-in input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
 .he-g{display:grid;grid-template-columns:28px 1fr 1fr;gap:6px 8px;align-items:center}.he-g>span{font-size:12px;font-weight:700;color:var(--muted);text-align:center}.he-g em{font-style:normal;color:var(--muted);font-weight:700;text-align:center}
 .he-g input{min-width:0;background:var(--tile);border:0;border-radius:12px;padding:11px 8px;font:inherit;font-size:18px;font-weight:700;text-align:center;color:var(--ink);font-variant-numeric:tabular-nums}
 .ck-ing2{display:flex;flex-direction:column;margin:0 0 14px;background:var(--tile);border-radius:14px;padding:2px 14px}
@@ -2029,14 +2032,14 @@ function setDelta(a,b){
   if(Math.abs(ka-kb)>0.01){ const d=ka-kb; return {cls:d>0?"up":"down", txt:(d>0?"+":"")+fmtNum(Math.round(d*100)/100)+" kg"}; }
   const d=(a.reps||0)-(b.reps||0); return {cls:d>0?"up":d<0?"down":"same", txt:d? (d>0?"+":"")+d : "="};
 }
-function cmpTable(sets, prev){
+function cmpTable(sets, prev, ed){
   const P = prev ? prev.sets : [];
   const n = Math.max(sets.length, P.length);
   const pd = prev ? new Date(prev.h.start).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"}) : "";
   let rows="";
   for(let i=0;i<n;i++){
     const a=sets[i], b=P[i], dl=setDelta(a,b);
-    rows += `<div class="cmp-r"><span class="cmp-n">${i+1}</span><span class="cmp-p">${b?setTxt(b):"–"}</span><span class="cmp-c">${a?setTxt(a):"–"}</span><span class="cmp-d ${dl.cls}">${prev?dl.txt:""}</span></div>`;
+    rows += `<div class="cmp-r"><span class="cmp-n">${i+1}</span><span class="cmp-p">${b?setTxt(b):"–"}</span><span class="cmp-c">${a && ed ? `<span class="he-in"><input inputmode="decimal" data-he="${ed.ei}:${ed.si[i]}:kg" value="${a.kg!=null?fmtNum(a.kg):""}" aria-label="Gewicht Satz ${i+1}"><i>×</i><input inputmode="numeric" data-he="${ed.ei}:${ed.si[i]}:reps" value="${a.reps??""}" aria-label="Wiederholungen Satz ${i+1}"></span>` : a?setTxt(a):"–"}</span><span class="cmp-d ${dl.cls}">${prev?dl.txt:""}</span></div>`;
   }
   return `<div class="cmp">
     <div class="cmp-r cmp-h"><span class="cmp-n">#</span><span class="cmp-p">${prev?"Davor · "+pd:""}</span><span class="cmp-c">Heute</span><span class="cmp-d">${prev?"Δ":""}</span></div>
@@ -2053,20 +2056,6 @@ function workoutCompare(h){
     <div class="wc-g">${item("Volumen",vol(h),vol(p)," kg")}${item("Wiederholungen",reps(h),reps(p),"")}${item("Sätze",sets(h),sets(p),"")}</div></div>`;
 }
 const histEditable = h => !!h && !h.imported && todayKey(new Date(h.start))===todayKey();
-function histEditView(h){
-  const rows=h.exercises.map((e,ei)=>({e,ei,sets:e.sets.map((s,si)=>({s,si})).filter(o=>!o.s.warm)})).filter(o=>o.sets.length);
-  $("histsheet").innerHTML=`
-    <div class="grab"></div>
-    <div class="sheet-top" style="justify-content:space-between"><button class="link" data-act="histEditCancel">Abbrechen</button><button class="link" data-act="histEditSave"><b>Speichern</b></button></div>
-    <div class="sheet-scroll">
-      <div class="pv-title"><h1>${esc(h.name)}</h1></div>
-      <div class="pv-meta">Training bearbeiten</div>
-      ${rows.map(o=>`<div class="hd-card"><div class="hd-t" style="margin-bottom:8px"><b>${esc(o.e.name)}</b></div>
-        <div class="he-g"><span>#</span><span>KG</span><span>WDH</span>${o.sets.map((x,k)=>`<em>${k+1}</em><input inputmode="decimal" data-he="${o.ei}:${x.si}:kg" value="${x.s.kg!=null?fmtNum(x.s.kg):""}"><input inputmode="numeric" data-he="${o.ei}:${x.si}:reps" value="${x.s.reps??""}">`).join("")}</div></div>`).join("")}
-      <button class="m-btn pri" data-act="histEditSave" style="margin-top:14px">Speichern</button>
-    </div>`;
-  $("histsheet").querySelector(".sheet-scroll").scrollTop=0;
-}
 function histEditSave(id){
   const h=S.history.find(x=>x.id===id); if(!histEditable(h)) return;
   let bad=false;
@@ -2078,7 +2067,7 @@ function histEditSave(id){
     const a={workoutId:h.workoutId, ex:{}}; w.exercises.forEach(e=>{ const he=h.exercises.find(x=>x.exId===e.id); a.ex[e.id]={sets:(he?he.sets.filter(s=>!s.warm):[]).map(s=>({done:true, kg:s.kg, reps:s.reps}))}; });
     try{ const sc=scoreSession(a); if(sc) h.score=sc; }finally{ S.history.splice(i,0,h); } } }catch(_){}
   h.edited=Date.now(); delete PR_CACHE[h.id];
-  persist(); pushHistory(h); UI.histEdit=null; openHistDetail(h.id); try{ bgRender(); }catch(_){} toast("Training gespeichert");
+  persist(); pushHistory(h); UI.histEdit=null; histRerender(h.id); try{ bgRender(); }catch(_){} toast("Training gespeichert");
 }
 function openHistDetail(id){
   const h=S.history.find(x=>x.id===id); if(!h) return;
@@ -2086,9 +2075,11 @@ function openHistDetail(id){
   const allSets=h.exercises.reduce((a,e)=>a+e.sets.filter(s=>!s.warm).length,0);
   const vol=h.exercises.reduce((a,e)=>a+e.sets.filter(s=>!s.warm).reduce((b,s)=>b+(s.kg||0)*(s.reps||0),0),0);
   const exAll=PLAN.workouts.flatMap(w=>w.exercises);
-  const cards=h.exercises.filter(e=>e.sets.length).map(e=>{
+  const editing = UI.histEdit===h.id && histEditable(h);
+  const cards=h.exercises.map((e,ei)=>({e,ei})).filter(o=>o.e.sets.length).map(({e,ei})=>{
     const ex=exAll.find(x=>x.id===e.exId)||{id:e.exId,name:e.name,equip:"",muscle:""};
     const sets=e.sets.filter(s=>!s.warm);
+    const ed = editing ? {ei, si:e.sets.map((s,i)=>s.warm?null:i).filter(i=>i!=null)} : null;
     const T=exTarget(e.exId);
     const t=exTrend(e.exId, sets.filter(s=>s.reps!=null), h.start);
     const evol=sets.reduce((b,s)=>b+(s.kg||0)*(s.reps||0),0);
@@ -2097,13 +2088,13 @@ function openHistDetail(id){
     const prevTxt = t ? `Davor (${new Date(t.prev.h.start).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"})}): ${t.prev.sets.map(s=>fmtNum(s.kg||0)+"×"+s.reps).join(", ")}` : "";
     return `<div class="hd-card">
       <div class="hd-top">${ex.equip?thumb(ex):""}<div class="hd-t"><b>${esc(e.name)}</b><span>${sets.length} Sätze${evol?` · ${Math.round(evol).toLocaleString("de-DE")} kg Volumen`:""}</span></div>${trend}</div>
-      ${cmpTable(sets, t?t.prev:null)}
+      ${cmpTable(sets, t?t.prev:null, ed)}
       ${(()=>{ const p=sessionPRs(h).find(x=>x.exId===e.exId); return p?`<div class="pr-line"><span class="tr-ic">${svgIc("trophy")}</span>${esc(p.text)}</div>`:""; })()}
     </div>`;
   }).join("");
   $("histsheet").innerHTML=`
     <div class="grab"></div>
-    <div class="sheet-top" style="justify-content:space-between">${histEditable(h)?`<button class="link" data-act="histEdit" data-id="${h.id}">Bearbeiten</button>`:"<span></span>"}<button class="link" data-act="closeHist">Schließen</button></div>
+    <div class="sheet-top" style="justify-content:space-between">${editing?`<button class="link" data-act="histEditCancel">Abbrechen</button><button class="link" data-act="histEditSave"><b>Speichern</b></button>`:`${histEditable(h)?`<button class="link" data-act="histEdit" data-id="${h.id}">Bearbeiten</button>`:"<span></span>"}<button class="link" data-act="closeHist">Schließen</button>`}</div>
     <div class="sheet-scroll">
       <div class="pv-title"><h1>${esc(h.name)}</h1></div>
       <div class="pv-meta">${WEEKDAYS[d.getDay()]}, ${d.toLocaleDateString("de-DE",{day:"numeric",month:"long",year:"numeric"})}${h.imported?" · importiert":""}</div>
@@ -2118,9 +2109,11 @@ function openHistDetail(id){
       ${cards}
       <button class="del-btn" data-act="delAsk" data-id="${h.id}">Training löschen</button>
     </div>`;
+  const keep=openHistDetail._keep; openHistDetail._keep=null;
   $("histsheet").classList.add("open"); $("scrimH").classList.add("open");
-  $("histsheet").querySelector(".sheet-scroll").scrollTop=0;
+  $("histsheet").querySelector(".sheet-scroll").scrollTop=keep||0;
 }
+function histRerender(id){ const sc=$("histsheet").querySelector(".sheet-scroll"); openHistDetail._keep=sc?sc.scrollTop:0; openHistDetail(id); }
 function closeHist(){ UI.histEdit=null; $("histsheet").classList.remove("open"); $("scrimH").classList.remove("open"); }
 /* ================= Preview sheet ================= */
 function renderPreview(){
@@ -5698,9 +5691,9 @@ document.addEventListener("click", ev=>{
       saveLocal(); if(DB) userCol().doc("w"+id).delete().catch(()=>{});
       delete UI.histOpen[id]; closeModal(); closeHist(); renderHome(); toast("Training gelöscht"); break; }
     case "hist": openHistDetail(b.dataset.id); break;
-    case "histEdit": { const h=S.history.find(x=>x.id===b.dataset.id); if(histEditable(h)){ UI.histEdit=h.id; histEditView(h); } break; }
+    case "histEdit": { const h=S.history.find(x=>x.id===b.dataset.id); if(histEditable(h)){ UI.histEdit=h.id; histRerender(h.id); } break; }
     case "histEditSave": if(UI.histEdit) histEditSave(UI.histEdit); break;
-    case "histEditCancel": { const id=UI.histEdit; UI.histEdit=null; if(id) openHistDetail(id); break; }
+    case "histEditCancel": { const id=UI.histEdit; UI.histEdit=null; if(id) histRerender(id); break; }
     case "closeHist": closeHist(); break;
     case "bkExport": bkExport(); break;
     case "bkCopy": navigator.clipboard.writeText(backupJSON()).then(()=>toast("Sicherung kopiert")).catch(()=>toast("Kopieren nicht möglich")); break;

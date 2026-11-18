@@ -558,6 +558,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 #restDone{position:fixed;left:50%;bottom:calc(var(--safe-b) + 12px);transform:translate(-50%,calc(100% + var(--safe-b) + 40px));opacity:0;visibility:hidden;width:calc(100% - 24px);max-width:496px;z-index:60;background:var(--accent);color:#fff;border-radius:20px;padding:14px 14px 14px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .25s,visibility 0s .3s}
 #restDone.show{transform:translate(-50%,0);opacity:1;visibility:visible;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s,visibility 0s;animation:rdGlow 1.2s ease-in-out 3}
 #restDone .rd-txt{flex:1;min-width:0}
+body.rd-show #dockNext,body.rd-show #fab{visibility:hidden}
 #restDone .rd-s b{font-weight:800;font-size:14px}
 #restDone .rd-t{font-size:20px;font-weight:800;line-height:1.1}
 #restDone .rd-s{font-size:13px;opacity:.92;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2701,13 +2702,13 @@ function restDoneFlash(){
   }
   let el=$("restDone"); if(!el){ el=document.createElement("div"); el.id="restDone"; document.body.appendChild(el); }
   el.innerHTML=`<div class="rd-txt"><div class="rd-t">Pause vorbei</div><div class="rd-s">${sub}</div></div><button class="rd-go" data-act="rdGo">Weiter</button>`;
-  rdPlace(el); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); rdPlace(el);
+  rdPlace(el); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); rdPlace(el); document.body.classList.add("rd-show");
   clearTimeout(rdT); rdT=setTimeout(hideRestDone, 10000);
 }
 function rdPlace(el){ el=el||$("restDone"); if(!el) return; const r=$("resume"), on=!!(r && r.style.display!=="none" && getComputedStyle(r).display!=="none" && r.getBoundingClientRect().height>0);
   if(on) el.style.setProperty("--rs-h", r.offsetHeight+"px");
   el.classList.toggle("on-resume", on); document.body.classList.toggle("rd-on", on && el.classList.contains("show")); }
-function hideRestDone(){ const el=$("restDone"); if(el) el.classList.remove("show"); document.body.classList.remove("rd-on"); clearTimeout(rdT); }
+function hideRestDone(){ const el=$("restDone"); if(el) el.classList.remove("show"); document.body.classList.remove("rd-on","rd-show"); clearTimeout(rdT); }
 function rdGo(){
   hideRestDone(); if(!S.active) return; stopRest();
   closeTimer&&closeTimer(); closeModal();

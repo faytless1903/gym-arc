@@ -582,6 +582,7 @@ body.rd-on .resume{opacity:0;transform:translateX(-50%) scale(.96);pointer-event
 .alt-l{font-size:12px;font-weight:600;color:var(--muted);margin:14px 0 6px}
 .m-btn.alt-o{display:flex;justify-content:space-between;align-items:center;text-align:left}
 .m-btn.alt-o span{font-size:12px;color:var(--muted);font-weight:600}
+.next-btn.rd-pulse{animation:rdGlow 1.2s ease-in-out 3}
 .next-btn{display:block;width:100%;background:var(--accent);color:#fff;font-weight:700;font-size:17px;border-radius:18px;padding:16px;margin-top:18px}
 .next-btn.grn{background:var(--accent);color:#fff}
 .rec-status{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:var(--muted);font-size:13px;margin:-8px 0 16px}
@@ -2683,7 +2684,7 @@ function updateFab(){
   if(left==null){ cls="timer-fab"; html=`<span class="ic">${IC.timer}<span class="lbl">Pausentimer</span></span><span class="tt sm">${fmtTime(curRest())}</span>`; }
   else if(left>0){ const tot=(S.active.restTotal||S.settings.rest); cls="timer-fab run";
     html=`<span class="fill" style="width:${Math.max(0,Math.min(100,left/tot*100))}%"></span><span class="lbl">Satzpause</span><span class="tt">${fmtTime(Math.ceil(left))}</span>`; }
-  else { cls="timer-fab over"; html=`<span class="lbl">Pause vorbei</span><span class="tt">Weiter</span>`; }
+  else { cls="timer-fab over"; html=`<span class="lbl">Pause vorbei</span><span class="tt">0:00</span>`; }
   if(fab.className!==cls) fab.className=cls;
   if(fab._h!==html){ fab.innerHTML=html; fab._h=html; }
 }
@@ -2710,6 +2711,9 @@ let rdT=null, rdTarget=null;
 function restDoneFlash(){
   const a=S.active; if(!a) return;
   try{ navigator.vibrate&&navigator.vibrate([200,100,200]); }catch(_){}
+  // Übung fertig und unten steht schon „Weiter: nächste Übung“ → kein zweiter Hinweis, nur diesen Button hervorheben
+  const nb = UI.workoutOpen && UI.ex ? document.querySelector("#dockNext .next-btn") : null;
+  if(nb){ stopRest(); const b=document.querySelector("#dockNext .next-btn"); if(b){ b.classList.remove("rd-pulse"); void b.offsetWidth; b.classList.add("rd-pulse"); } return; }
   const w=W(a.workoutId); let sub="Nächster Satz"; rdTarget=null;
   const id = UI.ex || UI.lastEx; const x = id && a.ex[id]; const e = id && w.exercises.find(o=>o.id===id);
   if(x && e){
@@ -2725,7 +2729,9 @@ function restDoneFlash(){
 function rdPlace(el){ el=el||$("restDone"); if(!el) return; const r=$("resume"), on=!!(r && r.style.display!=="none" && getComputedStyle(r).display!=="none" && r.getBoundingClientRect().height>0);
   if(on) el.style.setProperty("--rs-h", r.offsetHeight+"px");
   el.classList.toggle("on-resume", on); document.body.classList.toggle("rd-on", on && el.classList.contains("show")); }
-function hideRestDone(){ const el=$("restDone"); if(el) el.classList.remove("show"); document.body.classList.remove("rd-on","rd-show"); clearTimeout(rdT); }
+function hideRestDone(){ const el=$("restDone"); const was=el && el.classList.contains("show"); if(el) el.classList.remove("show"); document.body.classList.remove("rd-on","rd-show"); clearTimeout(rdT);
+  // Hinweis weg = Pause erledigt → unten kein zweites „Weiter“
+  if(was){ try{ const l=restLeft(); if(l!=null && l<=0) stopRest(); }catch(_){} } }
 function rdGo(){
   hideRestDone(); if(!S.active) return; stopRest();
   closeTimer&&closeTimer(); closeModal();

@@ -2157,6 +2157,17 @@ function addWarmups(w, ex){
 }
 
 /* ================= Gerät belegt -> Alternative ================= */
+/* Reihenfolge: Wie stark waren die Muskeln einer Übung durch vorher gemachte Übungen schon ermüdet – tatsächlich vs. laut Plan?
+   "fresh" = deutlich frischer als geplant (früher gemacht), "tired" = deutlich vorermüdeter (später gemacht) */
+function preFatigue(exId, prev){ const X=EX_MUSCLES[exId]||{}; const tot=Object.values(X).reduce((t,v)=>t+v,0); if(!tot) return 0;
+  return prev.reduce((t,[pid,f])=>t+exOverlap(pid,exId)/tot*f,0); }
+function orderEffect(a, w, exId){ try{
+  const x=a.ex[exId]; if(!x || !x.t0 || !x.sets.some(s=>s.done)) return null;
+  const done=id=>(a.ex[id]?a.ex[id].sets.filter(s=>s.done).length:0);
+  const real=w.exercises.filter(o=>o.id!==exId && a.ex[o.id] && a.ex[o.id].t0 && a.ex[o.id].t0<x.t0).map(o=>[o.id, Math.min(1,done(o.id)/3)]);
+  const i=w.exercises.findIndex(o=>o.id===exId); const plan=w.exercises.slice(0,i).map(o=>[o.id, Math.min(1,(o.sets||3)/3)]);
+  const d=preFatigue(exId, real)-preFatigue(exId, plan);
+  return d<=-0.5 ? "fresh" : d>=0.5 ? "tired" : null; }catch(_){ return null; } }
 function exOverlap(a,b){ const A=EX_MUSCLES[a]||{}, B=EX_MUSCLES[b]||{}; let s=0; for(const m in A){ if(B[m]) s+=Math.min(A[m],B[m]); } return s; }
 function isFin(id){ return S.active.ex[id].sets.every(s=>s.done); }
 function isBlocked(id){ return !!(S.active.blocked||{})[id]; }
@@ -2360,7 +2371,7 @@ const roundTo = (v,st) => Math.round(v/st)*st;
 const floorTo = (v,st) => Math.floor(v/st+1e-9)*st;
 function lastNFor(exId, n){
   const out=[];
-  for(const h of S.history){ if(h.deload) continue; const e=h.exercises.find(x=>x.exId===exId); if(e){ const sets=e.sets.filter(s=>!s.warm && s.reps!=null); if(sets.length) out.push({date:h.start, sets}); } if(out.length>=n) break; }
+  for(const h of S.history){ if(h.deload) continue; const e=h.exercises.find(x=>x.exId===exId); if(e){ const sets=e.sets.filter(s=>!s.warm && s.reps!=null); if(sets.length) out.push({date:h.start, sets, ord:e.ord||null}); } if(out.length>=n) break; }
   return out;
 }
 function baselineRec(ex){ const r=baselineRecRaw(ex); if(!r || r.kg==null || !stackOf(ex)) return r;
@@ -2388,11 +2399,15 @@ function baselineRecRaw(ex){
   }
   const e1 = Math.max(...L.map(s=>(s.kg||0)*(1+(s.reps||0)/30)));   // bester (meist erster) Satz
   const two = reps.length>=3 && reps[0]>=T && reps[1]>=T && minR>=T-1;   // die 2 frischesten Sätze im Ziel, letzter max. 1 Wdh drunter
+  if(ses[0].ord==="fresh" && (minR>=T || r1>=hi || two) && !(r1>=hi+1 && minR>=T))
+    return {action:"hold", kg:w, reason:`Letztes Mal früher im Training gemacht als geplant – die Muskeln waren frischer als sonst. Gewicht halten und in der normalen Reihenfolge bestätigen, dann steigern.`};
   if(minR>=T || r1>=hi || two){
     let nk = nextUp(ex, w);                                  // nächste real verfügbare Stufe
     const why = minR>=T?`Alle Sätze ≥ ${T} Wdh` : two?`Die ersten beiden Sätze ≥ ${T} Wdh, der letzte nur 1 drunter` : `Erster Satz ${r1} Wdh bis Versagen`;
     return {action:"up", kg:nk, reason:`${why} – Gewicht um ${fmtNum(nk-w)} kg steigern.`};
   }
+  if(ses[0].ord==="tired" && r1<lo)
+    return {action:"hold", kg:w, reason:`Letztes Mal später im Training gemacht als geplant – die Muskeln waren schon vorermüdet. Weniger Wdh zählen nicht als Rückschritt: Gewicht halten.`};
   // Nach einer Gewichtssteigerung: nicht reflexartig zurück, sondern Kraft (geschätztes 1RM) vergleichen
   if(r1<lo){ const ju=jumpInfo(ex, w); if(ju){
     const okR = Math.max(5, T-4);
@@ -2492,7 +2507,7 @@ async function analyzeWithClaude(){
   const w = W(a.workoutId);
   const data = w.exercises.map(e=>({
     id:e.id, name:e.name, equipment:e.equip, targetReps:e.reps, targetRepsMax:e.repsMax||null, plannedSets:e.sets, weightStepKg:STEP(e),
-    sessions: lastNFor(e.id, 8).map(s=>({date:new Date(s.date).toISOString().slice(0,10), sets:s.sets.map(x=>({kg:x.kg, reps:x.reps}))})),
+    sessions: lastNFor(e.id, 8).map(s=>({date:new Date(s.date).toISOString().slice(0,10), sets:s.sets.map(x=>({kg:x.kg, reps:x.reps})), ...(s.ord?{order:s.ord==="fresh"?"früher als geplant, Muskeln frischer":"später als geplant, Muskeln vorermüdet"}:{})})),
     availableWeightsKg: stackOf(e) ? (()=>{ const l=lastNFor(e.id,1)[0]; const w=l?Math.max(...l.sets.map(s=>s.kg||0)):0; return stackOf(e).filter(x=>!w || (x>=w*0.75 && x<=w*1.25)); })() : null,
     ruleSuggestion: a.base[e.id], lockedKg: (planLock(e)||{}).kg ?? null, stagnationWeeks: (stagnation(e)||{}).weeks||0, stagnationStrategy: (()=>{ const c=(S.stagAi||{})[e.id]; return c && c.key===stagKey(e.id) && c.status==="done" ? c.item : null; })()
   }));
@@ -2511,6 +2526,7 @@ Grundlagen, an die du dich hältst:
 - Senken (5–15 %) nur nach den obigen Kriterien.
 - Direkt nach einer Gewichtssteigerung (das Gewicht der letzten Einheit liegt über dem der Einheit davor) sind weniger Wdh normal. Vergleiche das geschätzte 1RM (kg × (1 + Wdh/30)) des ersten Satzes vor und nach dem Sprung: Ist es etwa gleich geblieben und schafft der erste Satz noch ≥ 5–6 Wdh, das neue Gewicht HALTEN und Wdh aufbauen – nicht sofort zurück. Nur zurück, wenn das 1RM deutlich gefallen ist, der erste Satz unter ~5 Wdh liegt oder 2+ Einheiten auf dem neuen Gewicht keine Wdh dazukommen. War der Sprung sehr groß (z. B. Kurzhanteln +25 %), sag das in der Begründung.
 - Berücksichtige Trends über mehrere Einheiten (Stagnation, Abfall, schnelle Fortschritte), nicht nur die letzte.
+- Hat eine Einheit das Feld order, lief die Übung in anderer Reihenfolge als geplant: "frischer" = Wdh sind etwas zu optimistisch (nicht allein deshalb steigern), "vorermüdet" = weniger Wdh sind kein Rückschritt (nicht deshalb senken).
 - Übungen ohne Daten: action "new", kg null.
 - Ist availableWeightsKg gesetzt (Gerät mit festen Stufen), MUSS kg exakt einer dieser Werte sein – auch im Begründungstext nur diese Gewichte nennen.
 - targetRepsMax gesetzt = Wdh-Bereich (z. B. 12–15): steigern erst, wenn alle Sätze ≥ targetReps oder der erste Satz ≥ targetRepsMax.
@@ -3222,7 +3238,7 @@ function lastPrDate(exId){ let kg=0, e1=0, reps=0, last=null;
 function stagnation(ex, raw){
   // je Training: Mittel der ersten 2 Sätze (geschätztes Ziel-RM bzw. Wdh) – erfasst auch Fortschritt in Folgesätzen
   const T=ex.reps; let ses=[];
-  S.history.forEach(h=>{ if(h.deload) return; const e=h.exercises.find(x=>x.exId===ex.id); if(!e) return; const st=e.sets.filter(s=>!s.warm&&s.reps!=null).slice(0,2); if(!st.length) return;
+  S.history.forEach(h=>{ if(h.deload) return; const e=h.exercises.find(x=>x.exId===ex.id); if(!e || e.ord) return; const st=e.sets.filter(s=>!s.warm&&s.reps!=null).slice(0,2); if(!st.length) return;
     const weighted=st.some(s=>s.kg>0);
     const v = weighted ? st.reduce((t,s)=>t+(s.kg||0)*(1+(s.reps||0)/30)/(1+T/30),0)/st.length : st.reduce((t,s)=>t+(s.reps||0),0)/st.length;
     ses.push({t:h.start, v, weighted}); });
@@ -5507,7 +5523,7 @@ function finish(){
     exercises: w.exercises.map(e=>{ const x=a.ex[e.id]; const sets=[];
       (x.wu||[]).filter(s=>s.done).forEach(s=>sets.push({kg:num(s.kg), reps:num(s.reps), warm:true}));
       x.sets.filter(s=>s.done).forEach(s=>sets.push({kg:num(s.kg), reps:num(s.reps)}));
-      return {exId:e.id, name:e.name, sets}; }) };
+      const o={exId:e.id, name:e.name, sets}; const od=orderEffect(a, w, e.id); if(od) o.ord=od; return o; }) };
   if(!h.exercises.some(e=>e.sets.length)){ toast("Keine Sätze abgehakt – nichts gespeichert"); }
   else { S.history.unshift(h); pushHistory(h); }
   S.active=null; persist(); closeModal(); closeEx(); closeTimer(); closeWorkout();
@@ -5669,7 +5685,7 @@ document.addEventListener("click", ev=>{
       if(!s.done){
         if(s.reps==null || s.reps==="") s.reps = e.reps;           // Ziel-Wdh übernehmen, falls leer
         if(s.kg==null || s.kg==="") s.kg = e.equip==="Körpergewicht"?0:null;
-        s.done=true; UI.ckT=Date.now(); if(a.blocked) delete a.blocked[UI.ex]; UI.pop=UI.ex+":"+i; setTimeout(()=>{ UI.pop=null; },700);
+        s.done=true; UI.ckT=Date.now(); if(!x.t0) x.t0=Date.now(); if(a.blocked) delete a.blocked[UI.ex]; UI.pop=UI.ex+":"+i; setTimeout(()=>{ UI.pop=null; },700);
         try{ let best=prBest(UI.ex); x.sets.forEach((o,j)=>{ if(o.done && j<i) best=prMerge(best, num(o.kg), num(o.reps)); });
           const pr=prCheck(best, num(s.kg), num(s.reps)); if(pr) setTimeout(()=>prCelebrate(e.name, pr), 150); }catch(_){}
         // Werte in nächsten leeren Satz übernehmen

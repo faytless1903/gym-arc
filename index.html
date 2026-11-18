@@ -923,6 +923,8 @@ body.m-lock{overflow:hidden}
 .he-in{display:inline-flex;align-items:center;gap:3px}.he-in i{font-style:normal;color:var(--muted)}
 .he-in input{width:46px;min-width:0;background:color-mix(in srgb,var(--accent) 10%,var(--tile));border:0;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 45%,transparent);border-radius:8px;padding:5px 2px;font:inherit;font-weight:700;text-align:center;color:var(--ink);font-variant-numeric:tabular-nums}
 .he-in input:focus{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
+body.kp-open #histsheet .sheet-scroll{padding-bottom:340px}
+#histsheet.editing .grab{visibility:hidden}#histsheet.editing .sheet-top{touch-action:none}
 .he-g{display:grid;grid-template-columns:28px 1fr 1fr;gap:6px 8px;align-items:center}.he-g>span{font-size:12px;font-weight:700;color:var(--muted);text-align:center}.he-g em{font-style:normal;color:var(--muted);font-weight:700;text-align:center}
 .he-g input{min-width:0;background:var(--tile);border:0;border-radius:12px;padding:11px 8px;font:inherit;font-size:18px;font-weight:700;text-align:center;color:var(--ink);font-variant-numeric:tabular-nums}
 .ck-ing2{display:flex;flex-direction:column;margin:0 0 14px;background:var(--tile);border-radius:14px;padding:2px 14px}
@@ -2065,7 +2067,7 @@ function histEditSave(id){
   try{ const w=W(h.workoutId); if(w){ const i=S.history.indexOf(h); S.history.splice(i,1);
     const a={workoutId:h.workoutId, ex:{}}; w.exercises.forEach(e=>{ const he=h.exercises.find(x=>x.exId===e.id); a.ex[e.id]={sets:(he?he.sets.filter(s=>!s.warm):[]).map(s=>({done:true, kg:s.kg, reps:s.reps}))}; });
     try{ const sc=scoreSession(a); if(sc) h.score=sc; }finally{ S.history.splice(i,0,h); } } }catch(_){}
-  h.edited=Date.now(); delete PR_CACHE[h.id];
+  try{ kpHide(false); }catch(_){} h.edited=Date.now(); delete PR_CACHE[h.id];
   persist(); pushHistory(h); UI.histEdit=null; histRerender(h.id); try{ bgRender(); }catch(_){} toast("Training gespeichert");
 }
 function openHistDetail(id){
@@ -2108,12 +2110,12 @@ function openHistDetail(id){
       ${cards}
       <button class="del-btn" data-act="delAsk" data-id="${h.id}">Training löschen</button>
     </div>`;
-  const keep=openHistDetail._keep; openHistDetail._keep=null;
+  const keep=openHistDetail._keep; openHistDetail._keep=null; $("histsheet").classList.toggle("editing", editing);
   $("histsheet").classList.add("open"); $("scrimH").classList.add("open");
   $("histsheet").querySelector(".sheet-scroll").scrollTop=keep||0;
 }
 function histRerender(id){ const sc=$("histsheet").querySelector(".sheet-scroll"); openHistDetail._keep=sc?sc.scrollTop:0; openHistDetail(id); }
-function closeHist(){ UI.histEdit=null; $("histsheet").classList.remove("open"); $("scrimH").classList.remove("open"); }
+function closeHist(){ UI.histEdit=null; try{ kpHide(false); }catch(_){} $("histsheet").classList.remove("open"); $("scrimH").classList.remove("open"); }
 /* ================= Preview sheet ================= */
 function renderPreview(){
   const w = W(UI.preview); if(!w) return;
@@ -5692,7 +5694,7 @@ document.addEventListener("click", ev=>{
     case "hist": openHistDetail(b.dataset.id); break;
     case "histEdit": { const h=S.history.find(x=>x.id===b.dataset.id); if(histEditable(h)){ UI.histEdit=h.id; histRerender(h.id); } break; }
     case "histEditSave": if(UI.histEdit) histEditSave(UI.histEdit); break;
-    case "histEditCancel": { const id=UI.histEdit; UI.histEdit=null; if(id) histRerender(id); break; }
+    case "histEditCancel": { const id=UI.histEdit; UI.histEdit=null; try{ kpHide(false); }catch(_){} if(id) histRerender(id); break; }
     case "closeHist": closeHist(); break;
     case "bkExport": bkExport(); break;
     case "bkCopy": navigator.clipboard.writeText(backupJSON()).then(()=>toast("Sicherung kopiert")).catch(()=>toast("Kopieren nicht möglich")); break;
@@ -6137,7 +6139,7 @@ document.addEventListener("pointerdown", ev=>{ if(!KP.inp) return; const t=ev.ta
 // Sheet per Wischen nach unten schließen (am Griff/Kopf)
 function swipeClose(el, fn){
   let y0=null, dy=0;
-  el.addEventListener("touchstart", e=>{ const t=e.target; if(!t.closest(".grab,.sheet-top,.aw-head")) return; y0=e.touches[0].clientY; dy=0; el.style.transition="none"; }, {passive:true});
+  el.addEventListener("touchstart", e=>{ const t=e.target; if(!t.closest(".grab,.sheet-top,.aw-head")) return; if(el.id==="histsheet" && UI.histEdit) return; /* beim Bearbeiten nicht versehentlich wegwischen */ y0=e.touches[0].clientY; dy=0; el.style.transition="none"; }, {passive:true});
   el.addEventListener("touchmove", e=>{ if(y0==null) return; dy=Math.max(0,e.touches[0].clientY-y0); el.style.transform=`translate(-50%,${dy}px)`; }, {passive:true});
   el.addEventListener("touchend", ()=>{ if(y0==null) return; el.style.transition=""; el.style.transform=""; if(dy>110) fn(); y0=null; });
 }

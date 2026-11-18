@@ -622,26 +622,29 @@
       return { steps: x.steps, active: x.active, bonus: bonus, n: keys.length };
     }
   };
-  async function hlToken(){
+  async function hlToken(fresh){
     try{
-      var d = await callFn("health", { action: "newtoken" });
+      var d = await callFn("health", { action: fresh ? "newtoken" : "token" });
       var url = BASE + "/functions/v1/health";
       modal('<h3>Apple Health verbinden</h3><p>Lege in der Kurzbefehle-App einen Kurzbefehl an (Anleitung unten). Er braucht diese zwei Angaben:</p>' +
         '<div class="fv-l">Adresse</div><div class="gh-copy"><code id="ghUrl">' + url + '</code><button class="pill-btn" data-ghc="ghUrl">Kopieren</button></div>' +
         '<div class="fv-l" style="margin-top:10px">Dein Schlüssel</div><div class="gh-copy"><code id="ghTok">' + d.token + '</code><button class="pill-btn" data-ghc="ghTok">Kopieren</button></div>' +
-        '<p class="nu-hint" style="margin-top:10px">Ein neuer Schlüssel macht den alten ungültig. Gib ihn niemandem weiter.</p>' +
+        '' +
         '<div class="fv-l" style="margin-top:12px">Kurzbefehl</div><ol class="gh-steps">' +
         '<li><b>Health-Beispiele suchen</b> („Find Health Samples“): Typ <b>Schritte</b>, Startdatum <b>ist heute</b></li>' +
         '<li><b>Statistik berechnen</b> („Calculate Statistics“): <b>Summe</b> → umbenennen in <i>Schritte</i></li>' +
         '<li>Nochmal <b>Health-Beispiele suchen</b>: Typ <b>Aktive Energie</b>, Startdatum <b>ist heute</b> → <b>Statistik berechnen: Summe</b> → umbenennen in <i>Aktiv</i></li>' +
         '<li><b>Inhalte von URL abrufen</b> („Get Contents of URL“): Adresse von oben, Methode <b>POST</b>, Hauptteil <b>JSON</b> mit drei Feldern: <code>token</code> (Text: dein Schlüssel), <code>steps</code> (Zahl: <i>Schritte</i>), <code>active</code> (Zahl: <i>Aktiv</i>)</li>' +
         '<li>Unter <b>Automation</b> → <b>Tageszeit</b>: z. B. 12:00, 18:00 und 21:30 → <b>Sofort ausführen</b></li></ol>' +
-        '<button class="m-btn pri" data-act="closeModal">Fertig</button>');
+        '<button class="m-btn pri" data-act="closeModal">Fertig</button>' +
+        (fresh ? '' : '<button class="m-btn" data-ghnew="1" style="margin-top:8px">Neuen Schlüssel erzeugen</button>'));
+      if(fresh) toast2("Neuer Schlüssel – im Kurzbefehl ersetzen");
     }catch(e){ toast2("Nicht möglich: " + (e.message || e.code)); }
   }
   document.addEventListener("click", function(ev){
-    var b = ev.target.closest && ev.target.closest("[data-ghc],[data-gh]"); if(!b) return;
+    var b = ev.target.closest && ev.target.closest("[data-ghc],[data-gh],[data-ghnew]"); if(!b) return;
     ev.preventDefault(); ev.stopPropagation();
+    if(b.hasAttribute("data-ghnew")){ if(!b.dataset.sure){ b.dataset.sure = "1"; b.textContent = "Sicher? Alter Schlüssel wird ungültig"; b.classList.add("red"); return; } try{ closeModal(); }catch(_){} hlToken(true); return; }
     if(b.hasAttribute("data-gh")){ try{ closeModal(); }catch(_){} hlToken(); return; }
     var el = document.getElementById(b.getAttribute("data-ghc")); if(!el) return;
     try{ navigator.clipboard.writeText(el.textContent).then(function(){ toast2("Kopiert"); }); }catch(_){ toast2("Bitte lange drücken und kopieren"); }

@@ -1,7 +1,7 @@
 // Gym Arc – Server-Funktion "health" (Supabase Edge Function)
 // Nimmt Schritte und aktive Kalorien aus Apple Health entgegen (per iPhone-Kurzbefehl) und speichert sie im Dokument "health".
 // Der Kurzbefehl meldet sich mit einem persönlichen Schlüssel an, den die App erzeugt (Zahnrad → Apple Health).
-// Aktionen: newtoken (aus der App, angemeldet) | ohne action: Daten vom Kurzbefehl {token, steps, active, date?}
+// Aktionen: token (bestehender Schlüssel) | newtoken (neuer Schlüssel; beide aus der App, angemeldet) | ohne action: Daten vom Kurzbefehl {token, steps, active, date?}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -39,12 +39,16 @@ Deno.serve(async (req) => {
   try {
     const b = await req.json().catch(() => ({}));
 
-    if (b.action === "newtoken") {
+    if (b.action === "newtoken" || b.action === "token") {
       const u = await fetch(BASE + "/auth/v1/user", {
         headers: { Authorization: req.headers.get("Authorization") || "", apikey: req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "" },
       });
       if (!u.ok) return json({ code: "not_granted", message: "Nicht angemeldet" }, 401);
       const user = await u.json();
+      if (b.action === "token") { // bestehenden Schlüssel zeigen, nur ohne Schlüssel neu erzeugen
+        const ex = await db("health_tokens?user_id=eq." + user.id + "&select=token");
+        if (ex && ex[0] && ex[0].token) return json({ token: ex[0].token });
+      }
       const bytes = crypto.getRandomValues(new Uint8Array(18));
       const token = "gh_" + Array.from(bytes, (x) => x.toString(16).padStart(2, "0")).join("");
       await db("health_tokens?on_conflict=user_id", {
@@ -58,7 +62,7 @@ Deno.serve(async (req) => {
     const tok = String(b.token || "").trim();
     if (!/^gh_[0-9a-f]{36}$/.test(tok)) return json({ ok: false, message: "Schlüssel fehlt oder falsch" }, 401);
     const rows = await db("health_tokens?token=eq." + tok + "&select=user_id");
-    if (!rows.length) return json({ ok: false, message: "Schlüssel unbekannt – in der App neu erzeugen" }, 401);
+    if (!rows.length) return json({ ok: false, message: "Schlüssel veraltet – in Gym Arc unter Einstellungen → Apple Health den aktuellen Schlüssel kopieren" }, 401);
     const uid = rows[0].user_id;
     const day = /^\d{4}-\d\d-\d\d$/.test(String(b.date || "")) ? String(b.date) : berlinDay();
     const steps = numDe(b.steps), active = numDe(b.active);

@@ -2167,9 +2167,10 @@ function nextOpen(w, fromId){
 }
 function altFor(blockedId){
   const w=W(S.active.workoutId); const last=UI.lastEx && isFin(UI.lastEx) ? UI.lastEx : null;
-  const c=w.exercises.filter(o=>o.id!==blockedId && !isFin(o.id) && !isBlocked(o.id))
-    .map((o,idx)=>({o, ov:exOverlap(blockedId,o.id), ovLast: last? exOverlap(last,o.id):0, idx}));
-  c.sort((a,b)=> a.ov-b.ov || a.ovLast-b.ovLast || a.idx-b.idx);
+  // offen = noch nicht alle Sätze erledigt; früher als belegt markierte Übungen bleiben wählbar (kommen nur weiter hinten)
+  const c=w.exercises.filter(o=>o.id!==blockedId && !isFin(o.id))
+    .map((o,idx)=>({o, ov:exOverlap(blockedId,o.id), ovLast: last? exOverlap(last,o.id):0, idx, bl:isBlocked(o.id)?1:0}));
+  c.sort((a,b)=> a.bl-b.bl || a.ov-b.ov || a.ovLast-b.ovLast || a.idx-b.idx);
   return c;
 }
 function blockEx(id){

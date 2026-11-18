@@ -135,6 +135,12 @@ body.has-resume .home.fit{padding-bottom:calc(var(--safe-b) + 160px)}
 .resume .rs-r em{font-style:normal;font-size:26px;font-weight:800;font-stretch:var(--cond);font-variant-numeric:tabular-nums;color:#fff}
 .resume .rs-bar{position:absolute;left:0;bottom:0;height:3px;width:100%;background:rgba(255,255,255,.75);border-radius:0 2px 2px 0;transform-origin:left;transform:scaleX(0);transition:transform 1s linear;will-change:transform}
 .resume b{font-stretch:var(--cond);font-size:19px}
+.resume{padding:9px 14px 9px 16px;border-radius:14px;bottom:calc(var(--tb-h,64px) + 8px);box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 28%,transparent)}
+.resume b{font-size:16px}.resume small{font-size:12px}
+.resume .rs-r>span{padding:6px 12px;font-size:14px}.resume .rs-r em{font-size:21px}.resume .rs-r i{font-size:11px;margin-bottom:1px}
+body.has-resume .home{padding-bottom:calc(var(--tb-h,64px) + 96px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .resume{background:color-mix(in srgb,var(--accent) 62%,#000)}}
+:root[data-theme=dark] .resume{background:color-mix(in srgb,var(--accent) 62%,#000)}
 
 /* Einheitliche Abstände & Formen */
 .w-card,.hist-item,.hd-card,.ed-row,.pcard,.wc,.shop-page .sx-card,.ob-opt{margin-bottom:12px}
@@ -461,10 +467,10 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .aw-title{font-size:56px;line-height:1;font-weight:850;font-stretch:var(--cond);letter-spacing:-1px;margin:10px 0 6px}
 .progress{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin:14px 0 20px}
 .progress i{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width .35s}
-.ex-row .status{margin-left:auto;font-size:15px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
+.ex-row .status{margin-left:auto;font-size:15px;font-weight:600;color:color-mix(in srgb,var(--ink) 70%,transparent);font-variant-numeric:tabular-nums;flex-shrink:0}
 .ex-row .status:has(.setdots){display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .setdots{display:flex;gap:4px}
-.setdots i{width:14px;height:14px;border-radius:5px;background:var(--tile);box-shadow:inset 0 0 0 1.5px var(--line)}
+.setdots i{width:14px;height:14px;border-radius:5px;background:var(--tile);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--ink) 30%,transparent)}
 .setdots i.on{background:var(--accent);box-shadow:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M5 12.5l4.5 4.5L19 7.5%27 fill=%27none%27 stroke=%27white%27 stroke-width=%274%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E");background-size:10px;background-position:center;background-repeat:no-repeat}
 .strip-b{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
 .setdots.sm{gap:3px}.setdots.sm i{width:9px;height:9px;border-radius:3px;background-size:7px}
@@ -1026,6 +1032,9 @@ body.m-lock{overflow:hidden}
 .sp-fx{flex-shrink:0;width:40px;border-radius:14px;color:var(--faint);font-size:20px}
 .nu-disc{font-size:12px;color:var(--muted);margin:12px 4px 0;line-height:1.45}
 .nu-tabs{margin:4px 0 14px}
+.rng.nu-tabs{padding:4px;border-radius:12px}
+.rng.nu-tabs button{font-size:15px;padding:9px 16px;border-radius:9px;color:color-mix(in srgb,var(--ink) 62%,transparent)}
+.rng.nu-tabs button.on{color:var(--ink);font-weight:700}
 .nu-mac em{display:block;font-style:normal;font-size:11px;color:var(--faint);margin-top:2px}
 .fd-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .fd-nav button{width:42px;height:42px;border-radius:50%;background:var(--surface);font-size:24px;font-weight:600;color:var(--ink)}
@@ -1809,7 +1818,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
       const runW = S.active && S.active.workoutId; const hl = runW ? w.id===runW : w.id===nextW.id;
       return `<button class="w-card ${hl?"next":""}" data-act="preview" data-w="${w.id}">
         <div class="w-badge" style="--wb:${wColor(w)}">${wIcon(w)}</div>
-        <div><div class="w-name">${w.name}${hl?`<span class="nx">${runW?"Läuft":"Als Nächstes"}</span>`:""}</div>
+        <div><div class="w-name">${w.name}${hl&&!runW?`<span class="nx">Als Nächstes</span>`:""}</div>
         <div class="w-meta">${w.exercises.length} Übungen, ${totalSets(w)} Sätze</div>
         <div class="w-last">${ld? "Zuletzt "+relDay(ld).replace(/^(Heute|Gestern)$/,m=>m.toLowerCase())+(S.history.find(x=>x.workoutId===w.id).score? ", "+S.history.find(x=>x.workoutId===w.id).score.score+" %":"") : "Noch nicht trainiert"}</div></div>
         <span class="chev">›</span></button>`;
@@ -1885,7 +1894,10 @@ function pillSync(){
     const b=w.firstChild; if(b._h!==html){ b.innerHTML=html; b._h=html; }
   });
 }
+function tbH(){ try{ const t=document.querySelector(".tabbar"); if(t && t.offsetHeight) document.documentElement.style.setProperty("--tb-h", t.offsetHeight+"px"); }catch(_){} }
+addEventListener("resize", ()=>setTimeout(tbH,50));
 function renderResume(){
+  tbH();
   const r = $("resume");
   if(S.active && !UI.workoutOpen){
     const w = W(S.active.workoutId);
@@ -2659,7 +2671,7 @@ function renderTimerPanel(){
       <div class="big"><b id="ringTxt">${running?fmtTime(Math.ceil(left)):(left!=null?"0:00":fmtTime(curRest()))}</b><span>${running?"Satzpause":(left!=null?"Pause vorbei":"Pausentimer")}</span></div></div>
     <div class="t-row"><button data-act="rest" data-d="-15">−15 s</button>${running?`<button class="pri" data-act="restStop">Überspringen</button>`:`<button class="pri" data-act="restStart">Starten</button>`}<button data-act="rest" data-d="15">+15 s</button></div>
     <div class="note" style="margin-top:18px">${curEx()?`Pausenzeit für ${esc(curEx().name)}`:"Standard-Pausenzeit"}</div>
-    <div class="presets">${[60,90,120,150,180,240].map(s=>`<button class="${curRest()===s?"on":""}" data-act="restDefault" data-s="${s}">${fmtTime(s)}</button>`).join("")}</div>`;
+    <div class="presets">${[60,90,120,150,180].map(s=>`<button class="${curRest()===s?"on":""}" data-act="restDefault" data-s="${s}">${fmtTime(s)}</button>`).join("")}</div>`;
 }
 function openTimer(){ UI.timerOpen=true; renderTimerPanel(); $("tpanel").classList.add("open"); $("scrim3").classList.add("open"); }
 function closeTimer(){ UI.timerOpen=false; $("tpanel").classList.remove("open"); $("scrim3").classList.remove("open"); }
@@ -3040,7 +3052,7 @@ function exMenu(id){
       ${x.sets.length>1 && !x.sets[x.sets.length-1].done?`<button class="xm-it" data-act="xmSet" data-ex="${id}" data-d="-1">${IC2('<path d="M5 12h14"/>')}<span>Letzten Satz entfernen</span></button>`:""}
     </div>
     <div class="fv-l" style="margin-top:14px">Pausenzeit</div>
-    <div class="presets" style="justify-content:flex-start;margin-top:6px">${[60,90,120,150,180,240].map(s=>`<button class="${r===s?"on":""}" data-act="xmRest" data-ex="${id}" data-s="${s}">${fmtTime(s)}</button>`).join("")}</div>`);
+    <div class="presets" style="justify-content:flex-start;margin-top:6px">${[60,90,120,150,180].map(s=>`<button class="${r===s?"on":""}" data-act="xmRest" data-ex="${id}" data-s="${s}">${fmtTime(s)}</button>`).join("")}</div>`);
 }
 function openExChart(exId){
   const ex = PLAN.workouts.flatMap(w=>w.exercises).find(e=>e.id===exId);
@@ -3665,9 +3677,8 @@ function renderCutCard(compact){
     <div class="fb-t" style="margin:8px 0 4px"><i style="width:${Math.round(st.prog*100)}%;background:var(--good)"></i></div>
     <div class="nu-hint" style="margin-top:4px">${Math.abs(st.lost)<0.05?`Start heute`:st.lost>0?`−${f1(st.lost)} kg geschafft`:`+${f1(-st.lost)} kg seit Start`} · ${Math.round(st.prog*100)} %${eta?` · Ziel ca. ${eta}`:""}</div>
     <div class="cut-pace"><span>Tempo</span><b>${st.pace==null?"noch zu wenig Daten":`${st.pace<=0?"−":"+"}${fmtNum(Math.round(Math.abs(st.pace)*100)/100)} kg/Woche`}</b><em>Plan −${fmtNum(Math.round(st.plan*100)/100)} kg</em></div>
-    ${st.pace==null?`<div class="nu-hint">Wiege dich täglich morgens nach dem Aufstehen und Toilettengang – ab etwa 1 Woche Daten wird das Tempo berechnet.</div>`:""}
     ${st.advice?`<div class="cut-adv"><p>${st.advice.t}</p><button class="m-btn pri" data-act="cutAdj" data-d="${st.advice.d}">${st.advice.d>0?"+":"−"}150 kcal übernehmen</button></div>`:(st.days>=14&&st.pace!=null?`<div class="nu-hint good">Tempo passt – Kalorien so lassen.</div>`:"")}
-    <div class="cut-str ${st.down.length?"warn":""}">${st.tracked? (st.down.length? `⚠ Kraft gesunken (>5 % unter dem Stand vor dem Cut): ${st.down.slice(0,4).map(esc).join(", ")}${st.down.length>4?" …":""}. Bei mehreren Übungen: Defizit etwas verkleinern und genug Eiweiß essen.` : `✓ Kraft stabil – keine Übung mehr als 5 % unter dem Stand vor dem Cut.`) : `Kraft-Check startet nach dem ersten Training im Cut.`}</div>
+    ${st.tracked?`<div class="cut-str ${st.down.length?"warn":""}">${st.down.length? `⚠ Kraft gesunken (>5 % unter dem Stand vor dem Cut): ${st.down.slice(0,4).map(esc).join(", ")}${st.down.length>4?" …":""}. Bei mehreren Übungen: Defizit etwas verkleinern und genug Eiweiß essen.` : `✓ Kraft stabil – keine Übung mehr als 5 % unter dem Stand vor dem Cut.`}</div>`:""}
     ${today?"":`<button class="m-btn" data-act="goWeight">Gewicht heute eintragen</button>`}
     <button class="link sm" data-act="cutEnd" style="margin-top:10px;color:var(--muted)">Cut beenden</button>
   </div>`;
@@ -5677,7 +5688,7 @@ document.addEventListener("click", ev=>{
       if(b.dataset.f==="sets") x.sets=Math.min(6,Math.max(1,x.sets+d));
       else { x.reps=Math.min(30,Math.max(3,x.reps+d)); if(x.repsMax) x.repsMax=x.reps+3; }
       renderPreview(); break; }
-    case "edRest": { const x=UI.edit.list[+b.dataset.i], opts=[60,90,120,150,180,240]; x.rest=opts[(opts.indexOf(x.rest)+1)%opts.length]; renderPreview(); break; }
+    case "edRest": { const x=UI.edit.list[+b.dataset.i], opts=[60,90,120,150,180]; x.rest=opts[(opts.indexOf(x.rest)+1)%opts.length]; renderPreview(); break; }
     case "edRange": { const x=UI.edit.list[+b.dataset.i]; x.repsMax = x.repsMax? null : x.reps+3; renderPreview(); break; }
     case "edAddOpen": editAddModal(); break;
     case "edAdd": { const d=exDef(b.dataset.id); UI.edit.list.push({id:d.id, sets:d.sets||3, reps:d.reps||10, repsMax:d.repsMax||null, rest:d.rest||120}); closeModal(); renderPreview(); setTimeout(()=>{ const sc=$("preview").querySelector(".sheet-scroll"); if(sc) sc.scrollTop=sc.scrollHeight; },50); break; }

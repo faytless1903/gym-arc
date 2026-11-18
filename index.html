@@ -2709,7 +2709,7 @@ function rdPlace(el){ el=el||$("restDone"); if(!el) return; const r=$("resume"),
   el.classList.toggle("on-resume", on); document.body.classList.toggle("rd-on", on && el.classList.contains("show")); }
 function hideRestDone(){ const el=$("restDone"); if(el) el.classList.remove("show"); document.body.classList.remove("rd-on"); clearTimeout(rdT); }
 function rdGo(){
-  hideRestDone(); if(!S.active) return;
+  hideRestDone(); if(!S.active) return; stopRest();
   closeTimer&&closeTimer(); closeModal();
   if(!UI.workoutOpen) openWorkout();
   if(rdTarget && UI.ex!==rdTarget) openEx(rdTarget);

@@ -597,6 +597,26 @@
     if(k === "view") phView(p); else if(k === "del") phDelete(p); else if(k === "cmp") phCompareDialog(); else if(k === "pick") phPick(p); else if(k === "run") phRun();
   }, true);
   document.addEventListener("change", function(ev){ if(ev.target && ev.target.id === "gphIn"){ var f = ev.target.files && ev.target.files[0]; ev.target.value = ""; phUpload(f); } });
+  /* Tippen auf eine Mitteilung: direkt an die passende Stelle (Satzpause → aktiver Satz, Wiegen → Gewicht, Eiweiß → Tracking) */
+  function gaOpen(kind){
+    try{
+      if(kind === "rest"){
+        if(!S.active) return;
+        try{ closeModal(); }catch(_){}
+        var sh = document.getElementById("exsheet");
+        if(!(sh && sh.classList.contains("open"))) resumeWorkout();
+        setTimeout(function(){ var r = document.querySelector("#exsheet .set-r.active") || document.querySelector("#exsheet .set-r:not(.done):not(.warm)"); if(r) r.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);
+      } else if(kind === "weigh"){
+        var b = document.createElement("button"); b.setAttribute("data-act", "goWeight"); b.style.display = "none"; document.body.appendChild(b); b.click(); b.remove();
+      } else if(kind === "protein"){
+        try{ closeModal(); }catch(_){}
+        UI.tab = "nutrition"; UI.nuTab = "track"; renderHome(); scrollTo(0, 0);
+      }
+    }catch(_){}
+  }
+  try{ navigator.serviceWorker && navigator.serviceWorker.addEventListener("message", function(ev){ var k = ev.data && ev.data.gaOpen; if(k) setTimeout(function(){ gaOpen(k); }, 150); }); }catch(_){}
+  (function(){ try{ var q = new URLSearchParams(location.search), k = q.get("open"); if(!k) return; history.replaceState(null, "", location.pathname);
+    var n = 0, t = setInterval(function(){ n++; if((typeof S !== "undefined" && S && (k !== "rest" || S.active) && document.getElementById("home") && document.getElementById("home").children.length) || n > 40){ clearInterval(t); gaOpen(k); } }, 250); }catch(_){} })();
   window.gymArcRecipe = { load: function(url){ return callFn("recipe", { url: url }); } };
   window.gymArcPhotos = { upload: phUpload, html: function(){
     if(!sess) return "";

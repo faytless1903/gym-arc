@@ -262,6 +262,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 #bcScan .bc-line{position:absolute;z-index:2;left:10%;right:10%;top:50%;height:2px;background:#ff3b30;box-shadow:0 0 8px #ff3b30}
 #bcScan .bc-msg{color:var(--muted);font-size:14px;margin:10px 2px}
 #bcScan .bc-man{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}#bcScan .bc-man input{width:100%;min-width:0;box-sizing:border-box;border:0;border-radius:14px;background:var(--tile);color:var(--ink);padding:0 14px;font:inherit;font-size:16px;min-height:52px}#bcScan .bc-man .m-btn{margin:0;padding:0 18px;width:auto}
+.fa-bc .m-btn{padding-left:8px;padding-right:8px;font-size:15px;white-space:nowrap}
 .fd-act{font-size:13px;color:var(--muted);text-align:center;margin-top:6px}
 .gph-row{display:flex;gap:8px;overflow-x:auto;margin:12px -4px 0;padding:0 4px 2px;scrollbar-width:none}.gph-row::-webkit-scrollbar{display:none}
 .gph-th{flex:0 0 86px;display:flex;flex-direction:column;gap:4px;background:none;padding:0;color:var(--muted);font-size:12px;font-weight:600}
@@ -1533,6 +1534,9 @@ function cloudSet(id, data){
 async function cloudPump(id){
   const q=CQ[id]; q.busy=true;
   while(q.next){ let body=q.next; q.next=null;
+    if(/^f\d{4}-\d\d-\d\d$/.test(id)){ try{ const snap=await Promise.race([userCol().doc(id).get(), new Promise((_,rej)=>setTimeout(()=>rej({code:"timeout"}),6000))]);
+        const rd=snap && snap.exists && snap.data(); if(rd && rd.v===2){ const r=JSON.parse(JSON.stringify(rd)); const m=dayMerge(body, r);
+          if(!daySame(m, body)){ const k=id.slice(1); S.food[k]=m; DAYSEEN[k]=new Set(dayKeys(m)); saveLocal(); nutriRerender(); } body=m; } }catch(_){ } }
     if(id==="nutri"){ try{ const snap=await Promise.race([userCol().doc("nutri").get(), new Promise((_,rej)=>setTimeout(()=>rej({code:"timeout"}),6000))]);
         const rd=snap && snap.exists && snap.data(); if(rd){ const r=JSON.parse(JSON.stringify(rd)); const m=nutriMerge(body, r);
           if(!nutriSame(m, body) && S.nutri){ const add=nutriMerge(S.nutri, r); S.nutri=add; saveLocal(); nutriRerender(); } body=m; } }catch(_){ } }
@@ -1563,9 +1567,9 @@ window.addEventListener("unhandledrejection", ev=>{ try{ const r=ev.reason; if(r
 async function initCloud(){
   try{
     for(let i=0;i<20 && !(window.claude && window.claude.use);i++) await new Promise(r=>setTimeout(r,250));
-    if(!window.claude || !window.claude.use) return;
+    if(!window.claude || !window.claude.use){ STD_OK=true; CLOUD_LOADED=true; return; }
     const [db,user] = await Promise.all([claude.use("db"), claude.use("user")]);
-    if(!db||!user) return;
+    if(!db||!user){ STD_OK=true; CLOUD_LOADED=true; return; }
     const id = await user.id(); if(!id) return;
     DB=db; UID=id;
     if(S.mode==="pending"){ if(id===OWNER_ID){ S.mode="owner"; ownerSetup(); } else { S.mode="user"; userModeCleanup(); buildPlan(); } saveLocal(); renderAll(); }
@@ -1577,7 +1581,13 @@ async function initCloud(){
       let data = d.data(); if(!data) return; try{ data = JSON.parse(JSON.stringify(data)); }catch(_){ }
       if(d.id==="active"){ remoteActive = data.session||null; }
       else if(d.id==="settings"){ remoteSettings = data; }
-      else if(/^f\d{4}-\d\d-\d\d$/.test(d.id)){ const k=d.id.slice(1); S.food=S.food||{}; const loc=S.food[k]; if(!loc || (data.upd||0) > (loc.upd||0)){ S.food[k]=data; changed=true; } else if((loc.upd||0) > (data.upd||0)){ cloudSet("f"+k, loc); } }
+      else if(/^f\d{4}-\d\d-\d\d$/.test(d.id)){ const k=d.id.slice(1); S.food=S.food||{}; const loc=S.food[k];
+        if(!loc){ S.food[k]=data; changed=true; }
+        else if(data.v===2 && loc.v!==2){ S.food[k]=data; changed=true; }            // Server kennt Grabsteine, lokaler Stand ist alt
+        else { const remoteNewer=(data.upd||0) >= (loc.upd||0); const m = remoteNewer ? dayMerge(data, loc) : dayMerge(loc, data);
+          if(m!==loc && !(daySame(m, loc) && (m.upd||0)===(loc.upd||0))){ S.food[k]=m; changed=true; }
+          if(!daySame(m, data) || (!remoteNewer && (loc.upd||0)>(data.upd||0))) cloudSet("f"+k, S.food[k]); }
+        DAYSEEN[k]=new Set(dayKeys(S.food[k])); }
       else if(d.id==="nutri"){ const loc=S.nutri;
         if(!loc){ S.nutri=data; changed=true; }
         else { const remoteNewer=(data.upd||0) >= (loc.upd||0); const m = remoteNewer ? nutriMerge(data, loc) : nutriMerge(loc, data);
@@ -1601,7 +1611,9 @@ async function initCloud(){
     if(changed){ S.history.sort((a,b)=>b.start-a.start); saveLocal(); renderAll(); }
     stripFoodImages();
     nutriLive();
-  }catch(e){ DB=null; }
+    CLOUD_LOADED=true; STD_OK=true; try{ const k0=todayKey(); const had=!!(S.food&&S.food[k0]&&S.food[k0]._std); foodDay(k0); if(!had && UI.tab==="nutrition") keepScrollHome(renderHome); }catch(_){ }
+    dayLive();
+  }catch(e){ DB=null; STD_OK=true; CLOUD_LOADED=true; }
 }
 /* Ernährungs-Sync: Listen (Rezepte, Favoriten, Einkauf) werden pro Eintrag zusammengeführt statt komplett überschrieben.
    Gelöschte Einträge merken wir uns als „del“, damit sie nicht vom anderen Gerät zurückkommen. */
@@ -1625,7 +1637,20 @@ function nutriUnion(n, src){
   ["recipes","favs","shop"].forEach(key=>{ const L=n[key]=n[key]||[]; const have=new Set(L.map(x=>x&&(x.id||x.name||x.text))); (src[key]||[]).forEach(x=>{ const k=x&&(x.id||x.name||x.text); if(k && !have.has(k)){ L.push(x); have.add(k); } }); });
 }
 /* Live-Abgleich: Änderungen vom anderen Gerät (Einkaufsliste, Rezepte, Favoriten, Ziele) sofort übernehmen */
-let nutriUnsub=null, nutriPendingRender=false;
+let nutriUnsub=null, nutriPendingRender=false, dayUnsub=null, dayLiveKey=null;
+function dayLive(){ // heutigen Tag von anderen Geräten übernehmen (z. B. am PC gelöscht → am Handy weg)
+  if(!DB) return; const k=todayKey(); if(dayUnsub && dayLiveKey===k) return; try{ dayUnsub && dayUnsub(); }catch(_){ } dayLiveKey=k;
+  try{ dayUnsub = userCol().doc("f"+k).onSnapshot(snap=>{
+      if(!snap || snap.hasPendingWrites || !snap.exists) return; let data=snap.data(); if(!data || data.v!==2) return;
+      try{ data=JSON.parse(JSON.stringify(data)); }catch(_){ return; }
+      const loc=S.food&&S.food[k]; if(loc && daySame(loc, data) && (loc.upd||0)>=(data.upd||0)) return;
+      const m = !loc ? data : ((data.upd||0)>=(loc.upd||0) ? dayMerge(data, loc) : dayMerge(loc, data));
+      S.food=S.food||{}; S.food[k]=m; DAYSEEN[k]=new Set(dayKeys(m)); saveLocal(); nutriRerender();
+      if(!daySame(m, data)) cloudSet("f"+k, m);
+    }, ()=>{ dayUnsub=null; });
+  }catch(_){ dayUnsub=null; }
+}
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && DB && dayLiveKey!==todayKey()) dayLive(); });
 function nutriLive(){
   if(!DB || nutriUnsub) return;
   try{ nutriUnsub = userCol().doc("nutri").onSnapshot(snap=>{
@@ -3711,12 +3736,32 @@ function foodStd(){ S.nutri=S.nutri||{}; stdMigrate(); const out={}; MEALS.forEa
   (S.nutri.favs||[]).forEach(f=>{ const d=f.daily; if(!d||!d.m||!out[d.m]) return; const v=favLive(f), x=+d.x||1;
     out[d.m].push({...v, kcal:Math.round(v.kcal*x), p:Math.round(v.p*x), c:Math.round(v.c*x), f:Math.round(v.f*x), ...(x>1?{amt:x, parts:`${x}× ${v.parts||v.name}`}:{}), std:true, fav:true, sid:"fav-"+f.id}); });
   return out; }
+/* Tage pro Eintrag zusammenführen (wie Rezepte/Favoriten): Gelöschtes wird als „del“ gemerkt und kommt von keinem Gerät zurück.
+   v:2 = Tag wurde mit Grabsteinen gespeichert; ältere Stände ohne v gelten nur, wenn sie neuer sind (wie bisher). */
+const dayKeyOf=it=> it && it.sid ? "s:"+it.sid : it && it.t ? "t:"+it.t : "n:"+String(it&&it.name||"")+":"+Math.round(+(it&&it.kcal)||0);
+function dayKeys(d){ const o=[]; if(d) MEALS.forEach(([m])=>(d[m]||[]).forEach(it=>o.push(dayKeyOf(it)))); return o; }
+const DAYSEEN={};
+function dayMerge(a, b){ // a = neuerer Stand
+  if(!b) return a; if(!a) return b;
+  if(a.v!==2 || b.v!==2) return a;
+  const out=JSON.parse(JSON.stringify(a)); const del=new Set([...(a.del||[]), ...(b.del||[])]); out.del=[...del].slice(-300);
+  const have=new Set();
+  MEALS.forEach(([m])=>{ out[m]=(out[m]||[]).filter(it=>{ const k=dayKeyOf(it); if(del.has(k) || have.has(k)) return false; have.add(k); return true; }); });
+  MEALS.forEach(([m])=>(b[m]||[]).forEach(it=>{ const k=dayKeyOf(it); if(!have.has(k) && !del.has(k)){ (out[m]=out[m]||[]).push(JSON.parse(JSON.stringify(it))); have.add(k); } }));
+  if(b._std) out._std=true; out.upd=Math.max(a.upd||0, b.upd||0); return out; }
+const daySame=(a,b)=>{ const A=dayKeys(a).sort().join("|"), B=dayKeys(b).sort().join("|"); return A===B && ((a&&a.del)||[]).length===((b&&b.del)||[]).length; };
+// Tageseinträge aus Favoriten erst anlegen, wenn die Daten vom Server da sind – sonst trägt ein Gerät mit altem Stand längst Gelöschtes ein
+let STD_OK=false; setTimeout(()=>{ STD_OK=true; }, 20000);
+// Erst nach dem Abgleich mit dem Server werden Tage hochgeladen und als v:2 markiert – vorher gespeicherte Stände gelten als alt
+let CLOUD_LOADED=false;
 function foodDay(k){ S.food=S.food||{};
   if(!S.food[k]) S.food[k]={breakfast:[],lunch:[],dinner:[],snack:[]};
-  const d=S.food[k];
-  if(!d._std && k>=todayKey()){ const st=foodStd(); MEALS.forEach(([m])=>{ if(!(d[m]||[]).length) (st[m]||[]).forEach(it=>d[m].push({...it, t:Date.now()})); }); d._std=true; saveFoodDay(k); }
+  const d=S.food[k]; if(!DAYSEEN[k]) DAYSEEN[k]=new Set(dayKeys(d));
+  if(!d._std && k>=todayKey() && STD_OK){ const st=foodStd(); MEALS.forEach(([m])=>{ if(!(d[m]||[]).length) (st[m]||[]).forEach(it=>d[m].push({...it, t:Date.now()})); }); d._std=true; saveFoodDay(k); }
   return d; }
-function saveFoodDay(k){ if(S.food[k]){ S.food[k].upd=Date.now(); MEALS.forEach(([m])=>(S.food[k][m]||[]).forEach(it=>{ delete it.img; })); } saveLocal(); if(DB) cloudSet("f"+k, S.food[k]); }
+function saveFoodDay(k){ if(S.food[k]){ const d=S.food[k], now=new Set(dayKeys(d));
+    if(DAYSEEN[k]){ const gone=[...DAYSEEN[k]].filter(x=>!now.has(x)); if(gone.length) d.del=[...new Set([...(d.del||[]), ...gone])].slice(-300); }
+    DAYSEEN[k]=now; if(CLOUD_LOADED) d.v=2; S.food[k].upd=Date.now(); MEALS.forEach(([m])=>(S.food[k][m]||[]).forEach(it=>{ delete it.img; })); } saveLocal(); if(DB && CLOUD_LOADED) cloudSet("f"+k, S.food[k]); }
 function dayTotals(k){
   const d=(S.food||{})[k]; const t={kcal:0,p:0,c:0,f:0};
   if(d) MEALS.forEach(([m])=>(d[m]||[]).forEach(it=>{ t.kcal+=+it.kcal||0; t.p+=+it.p||0; t.c+=+it.c||0; t.f+=+it.f||0; }));
@@ -3823,7 +3868,7 @@ function foodAddMenu(view){
     <div class="fq"><input id="fqIn" type="search" placeholder="Lebensmittel suchen" autocomplete="off" enterkeyhint="search"><div id="fqRes"></div></div>
     <div class="fa-two"><button data-act="faView" data-v="fav"><span>★</span><b>Favoriten</b><em>${favList().length}</em></button><button data-act="faView" data-v="rec"><span>${svgIc("pot")}</span><b>Rezepte</b><em>${recList().length}</em></button><button data-act="faView" data-v="kan"><span>${svgIc("plate")}</span><b>Kantine</b><em>${kanList().length}</em></button></div>
     <button class="m-btn pri" data-act="faView" data-v="text">Mit Claude: Foto oder Beschreibung</button>
-    <button class="m-btn" data-act="foodManual">Selbst eintragen</button>`);
+    <div class="fe-save2 fa-bc"><button class="m-btn" data-act="bcScan" data-to="food">${BC_IC}Barcode</button><button class="m-btn" data-act="foodManual">Selbst eintragen</button></div>`);
 }
 async function foodTextSearch(){
   const q=($("fdQ")||{}).value||""; const meal=foodMeal;
@@ -4269,6 +4314,7 @@ async function offLookup(code){ // Open Food Facts → {name, p100, pack}
   finally{ clearTimeout(t); }
 }
 
+const BC_IC='<svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8 5v14M19 5v14" stroke="currentColor" stroke-width="1" fill="none"/></svg>';
 let BC=null; // laufender Scan
 function bcClose(){ if(!BC) return; BC.stop=true; try{ BC.stream && BC.stream.getTracks().forEach(t=>t.stop()); }catch(_){} const o=$("bcScan"); if(o) o.remove(); BC=null; }
 async function bcOpen(to){
@@ -4317,6 +4363,11 @@ async function bcFound(code){
     if(prod && prod.name && !E.name) E.name=prod.name;
     if(prod && prod.p100){ E.p100={...prod.p100}; if(prod.pack) E.pack=prod.pack; if(!E.g) E.g=100; E.show100=true; }
     favRender(note || `${prod.name||"Produkt"}: Nährwerte je 100 g übernommen (Open Food Facts) – trag noch deine Portion ein.`); return; }
+  if(to==="food"){
+    if(note){ toast(note.split(" – ")[0]); return; }
+    const P=prod.p100, g=prod.pack && prod.pack<=1000 ? prod.pack : 100, q=g/100;
+    foodEditor({name:prod.name||("Produkt "+code), p100:{...P}, ...(prod.pack?{pack:prod.pack}:{}), grams:g, kcal:Math.round(P.kcal*q), p:Math.round(P.p*q), c:Math.round(P.c*q), f:Math.round(P.f*q), parts:`${g} g · je 100 g: ${Math.round(P.kcal)} kcal`, ean:code}, foodMeal, -1);
+    return; }
   if(to==="rec"){ const R=UI.recEdit; if(!R) return; try{ recRead(); }catch(_){}
     if(!note){ R.lab=(R.lab||[]).concat([{name:prod.name||("Produkt "+code), g:0, k100:{...prod.p100}, ean:code}]); recEditor(R, `${prod.name||"Produkt"} hinzugefügt (Open Food Facts) – trag noch die Gramm ein.`); recLabTotals(); }
     else recEditor(R, note);

@@ -3941,10 +3941,11 @@ function foodAddMenu(view){
       <p class="nu-hint">Mit Foto schätzt Claude die Mengen, deine Angaben haben Vorrang. Nährwerte aus dem BLS 4.0.</p>
       <button class="m-btn pri" data-act="foodText">Nährwerte ermitteln</button>`); return; }
   modal(`<h3>${ml} hinzufügen</h3>
-    <div class="fq"><input id="fqIn" type="search" placeholder="Lebensmittel suchen" autocomplete="off" enterkeyhint="search"><div id="fqRes"></div></div>
+    <div class="fq"><input id="fqIn" type="search" placeholder="Schon gegessen suchen" autocomplete="off" enterkeyhint="search"><div id="fqRes"></div></div>
     <div class="fa-two"><button data-act="faView" data-v="fav"><span>★</span><b>Favoriten</b><em>${favList().length}</em></button><button data-act="faView" data-v="rec"><span>${svgIc("pot")}</span><b>Rezepte</b><em>${recList().length}</em></button><button data-act="faView" data-v="kan"><span>${svgIc("plate")}</span><b>Kantine</b><em>${kanList().length}</em></button></div>
     <button class="m-btn pri" data-act="faView" data-v="text">Mit Claude: Foto oder Beschreibung</button>
     <div class="fe-save2 fa-bc"><button class="m-btn" data-act="bcScan" data-to="food">${BC_IC}Barcode</button><button class="m-btn" data-act="foodManual">Selbst eintragen</button></div>`);
+  { const r=$("fqRes"); if(r) r.innerHTML=fqResults(""); }
 }
 async function foodTextSearch(){
   const q=($("fdQ")||{}).value||""; const meal=foodMeal;
@@ -4014,21 +4015,27 @@ function favAdd(id){
 }
 /* Alles, was du schon gegessen hast – für die Schnellsuche */
 function foodIndex(){
-  const m=new Map(); const add=(it,t,fav)=>{ if(!it || !it.name || !(+it.kcal>0)) return; const k=it.name.toLowerCase().trim(); const o=m.get(k)||{n:0,last:0,fav:false};
-    o.n++; if(t>=o.last){ o.last=t; o.it=pickVals(it); } o.fav=o.fav||fav; m.set(k,o); };
-  Object.keys(S.food||{}).forEach(k=>{ const t=new Date(k+"T12:00:00").getTime(); MEALS.forEach(([ml])=>((S.food[k]||{})[ml]||[]).forEach(it=>add(it,t,false))); });
+  const m=new Map(); const add=(it,t,fav,meal)=>{ if(!it || !it.name || !(+it.kcal>0)) return; const k=it.name.toLowerCase().trim(); const o=m.get(k)||{n:0,last:0,fav:false,meals:{}};
+    o.n++; if(t>=o.last){ o.last=t; o.it=pickVals(it); } o.fav=o.fav||fav; if(meal){ o.meals[meal]=Math.max(o.meals[meal]||0, t); } m.set(k,o); };
+  Object.keys(S.food||{}).forEach(k=>{ const t=new Date(k+"T12:00:00").getTime(); MEALS.forEach(([ml])=>((S.food[k]||{})[ml]||[]).forEach((it,i)=>add(it,(+it.t||t)+i,false,ml))); });
   favList().forEach(f=>add(f,0,true)); Object.values((S.nutri&&S.nutri.std)||{}).flat().forEach(it=>add(it,0,false));
   return [...m.values()];
 }
+/* Schnellsuche: nur, was du schon einmal eingetragen hast. Ohne Suchbegriff: zuletzt gegessen, zuerst bei dieser Mahlzeit. */
 function fqResults(q){
-  const s=q.toLowerCase().trim(); if(s.length<2) return "";
+  const s=String(q||"").toLowerCase().trim(); const idx=foodIndex().filter(o=>o.it);
+  const row=(o,i)=>`<button class="fq-it" data-act="fqAdd" data-i="${i}"><div><b>${esc(o.it.name)}</b><span>E ${o.it.p} · K ${o.it.c} · F ${o.it.f}</span></div><em>${o.it.kcal}<small> kcal</small></em></button>`;
+  if(s.length<2){
+    const meal=typeof foodMeal!=="undefined" ? foodMeal : null; const ml=(MEALS.find(x=>x[0]===meal)||[])[1];
+    const L=idx.filter(o=>o.last>0).sort((a,b)=>((b.meals[meal]?1:0)-(a.meals[meal]?1:0)) || ((b.meals[meal]||b.last)-(a.meals[meal]||a.last))).slice(0,6);
+    UI.fqList=L.map(o=>o.it); if(!L.length) return "";
+    return `<div class="fq-h">Zuletzt gegessen</div>`+L.map(row).join("");
+  }
   const words=s.split(/\s+/).filter(w=>w.length>=2 && !BLS_STOP.includes(w));
-  const own=foodIndex().map(o=>{ const n=o.it.name.toLowerCase(); if(!words.every(w=>n.includes(w))) return null; return {...o, score:(n.startsWith(s)?100:0)+Math.min(30,o.n*3)+(o.fav?10:0)}; }).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,3);
+  const own=idx.map(o=>{ const n=o.it.name.toLowerCase(); if(!(words.length?words:[s]).every(w=>n.includes(w))) return null; return {...o, score:(n.startsWith(s)?100:0)+Math.min(30,o.n*3)+(o.fav?10:0)}; }).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,8);
   UI.fqList=own.map(o=>o.it);
-  const B=blsSearch(words.length?words:[s], "", 8);
-  if(!own.length && !B.length) return `<div class="fq-none">Nichts gefunden – „Nährwerte von Claude ermitteln“ hilft weiter.</div>`;
-  return (own.length?`<div class="fq-h">Deine Einträge</div>`+own.map((o,i)=>`<button class="fq-it" data-act="fqAdd" data-i="${i}"><div><b>${esc(o.it.name)}</b><span>E ${o.it.p} · K ${o.it.c} · F ${o.it.f}</span></div><em>${o.it.kcal}<small> kcal</small></em></button>`).join(""):"")
-    + (B.length?`<div class="fq-h">BLS 4.0 · je 100 g</div>`+B.map(x=>`<button class="fq-it" data-act="blsPick" data-id="${x.id}"><div><b>${esc(x.n)}</b><span>E ${fmtNum(Math.round(x.p*10)/10)} · K ${fmtNum(Math.round(x.c*10)/10)} · F ${fmtNum(Math.round(x.f*10)/10)}</span></div><em>${Math.round(x.kcal)}<small> kcal</small></em></button>`).join(""):"");
+  if(!own.length) return `<div class="fq-none">Noch nicht eingetragen – einmal über „Mit Claude: Foto oder Beschreibung“ hinzufügen, danach findest du es hier.</div>`;
+  return `<div class="fq-h">Schon gegessen</div>`+own.map(row).join("");
 }
 function favAddSection(){
   const F=favList(), R=recList();

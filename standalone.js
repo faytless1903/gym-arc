@@ -349,15 +349,33 @@
         if(cur.length !== want.length || cur.some(function(v, i){ return v !== want[i]; })){ await sub.unsubscribe(); sub = null; }
       }
       if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(k.pub) });
-      await callFn("push", { action: "subscribe", sub: sub.toJSON() });
+      await callFn("push", { action: "subscribe", sub: sub.toJSON(), old: oldEp(sub.endpoint) });
+      try{ localStorage.setItem(EPK, sub.endpoint); }catch(_){}
       localStorage.setItem(PK, "1"); toast2("Mitteilungen an"); lastEnd = undefined; weighSync();
     }catch(e){ toast2("Einschalten fehlgeschlagen: " + (e.message || e.code)); }
     rerender();
   }
+  /* Pro Gerät nur eine Anmeldung: die vorherige Adresse dieses Geräts wird beim Server ersetzt */
+  var EPK = "ga-push-ep";
+  function oldEp(cur){ try{ var o = localStorage.getItem(EPK); return o && o !== cur ? o : ""; }catch(_){ return ""; } }
+  async function pushResync(){ // beim Öffnen: Adresse kann sich ändern (iOS) → Server aktuell halten, alte Adresse entfernen
+    try{
+      if(!sess || !pushOn() || !pushSupported() || Notification.permission !== "granted") return;
+      var reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+      if(!sub){ var k = await callFn("push", { action: "key" }); sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(k.pub) }); }
+      var last = ""; try{ last = localStorage.getItem(EPK) || ""; }catch(_){}
+      var day = new Date().toISOString().slice(0, 10), done = ""; try{ done = localStorage.getItem(EPK + "-day") || ""; }catch(_){}
+      if(last === sub.endpoint && done === day) return;   // höchstens 1× am Tag, außer die Adresse hat sich geändert
+      await callFn("push", { action: "subscribe", sub: sub.toJSON(), old: oldEp(sub.endpoint) });
+      try{ localStorage.setItem(EPK, sub.endpoint); localStorage.setItem(EPK + "-day", day); }catch(_){}
+    }catch(_){}
+  }
+  setTimeout(pushResync, 6000);
   async function pushDisable(){
     try{ localStorage.removeItem(PK); }catch(_){}
     try{ var reg = await navigator.serviceWorker.ready; var sub = await reg.pushManager.getSubscription();
       if(sub){ await callFn("push", { action: "unsubscribe", endpoint: sub.endpoint }).catch(function(){}); await sub.unsubscribe(); } }catch(_){}
+    try{ localStorage.removeItem(EPK); }catch(_){}
     callFn("push", { action: "cancel" }).catch(function(){});
     toast2("Mitteilungen aus"); rerender();
   }

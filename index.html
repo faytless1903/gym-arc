@@ -1967,12 +1967,23 @@ function bkMergeNutri(d){ let days=0; const N0=S.nutri||{}; const fresh=!(N0.rec
         if(cur==null || cur==="" || (Array.isArray(cur)&&!cur.length) || (typeof cur==="object" && !Array.isArray(cur) && !Object.keys(cur).length)) n[k]=src[k]; }); }
     saveNutri(); }
   saveLocal(); return days; }
+function bkLastText(){ let t=0; try{ t=+localStorage.getItem("ga-lastbk")||0; }catch(_){}
+  if(!t) return `<p class="nu-hint" style="margin:8px 2px 0">Noch keine Sicherung auf dem iPhone gespeichert. Der Server sichert zusätzlich jede Nacht (30 Tage).</p>`;
+  const d=Math.floor((Date.now()-t)/864e5), when=d<=0?"heute":d===1?"gestern":`vor ${d} Tagen`;
+  return `<p class="nu-hint" style="margin:8px 2px 0${d>30?";color:var(--warm)":""}">Letzte eigene Sicherung: ${when}${d>30?" – Zeit für eine neue":""}. Der Server sichert zusätzlich jede Nacht (30 Tage).</p>`; }
 async function bkExport(){
   const data=backupJSON(); const name="gym-arc-backup-"+todayKey()+".json";
   let saved=false, dl=null;
+  // iPhone-App: Teilen-Menü → „In Dateien sichern“ / iCloud (ein normaler Download bleibt in der Home-Bildschirm-App hängen)
+  try{ const f=new File([data],name,{type:"application/json"});
+    if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f], title:name}); saved=true; } }
+  catch(e){ if(e && e.name==="AbortError"){ return; } }
+  if(!saved){
   try{ if(window.claude && window.claude.use) dl = await claude.use("downloads"); }catch(_){}
   if(dl){ try{ await dl.save({filename:name, data}); saved=true; }catch(_){} }
   else { try{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:"application/json"})); a.download=name; document.body.appendChild(a); a.click(); a.remove(); saved=true; }catch(_){} }
+  }
+  if(saved){ try{ localStorage.setItem("ga-lastbk", String(Date.now())); }catch(_){} }
   modal(`<h3>Export</h3><p>${saved?"Die Sicherungsdatei wurde angeboten. ":""}Enthalten: ${bkCounts()}. Alternativ kannst du die Sicherung kopieren und z. B. in der Notizen-App speichern.</p>
     <button class="m-btn pri" data-act="bkCopy">In Zwischenablage kopieren</button><button class="m-btn" data-act="closeModal">Fertig</button>`);
 }
@@ -6179,6 +6190,7 @@ function settingsModal(){
     ${(window.gymArcPush && window.gymArcPush.html()) || ""}
     <div class="fv-l" style="margin-top:18px">Daten</div>
     <div class="st-bk"><button class="m-btn" data-act="bkExport">↑ Exportieren</button><button class="m-btn" data-act="bkImport">↓ Importieren</button></div>
+    ${bkLastText()}
 `);
 }
 // Farbe/Darstellung: Fenster bleibt stehen (kein Neuaufbau, kein Springen), nur die Auswahl und die Seite dahinter werden aktualisiert

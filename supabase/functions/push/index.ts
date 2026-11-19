@@ -193,6 +193,9 @@ Deno.serve(async (req) => {
         method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
         body: JSON.stringify({ endpoint: s.endpoint, user_id: user.id, sub: { endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } } }),
       });
+      // vorherige Adresse desselben Geräts entfernen → keine doppelten/verwaisten Anmeldungen
+      if (b.old && typeof b.old === "string" && b.old !== s.endpoint)
+        await db("push_subs?user_id=eq." + user.id + "&endpoint=eq." + encodeURIComponent(b.old), { method: "DELETE" });
       return json({ ok: true });
     }
     if (action === "unsubscribe") {

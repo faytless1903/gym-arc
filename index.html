@@ -3945,7 +3945,6 @@ function foodAddMenu(view){
     <div class="fa-two"><button data-act="faView" data-v="fav"><span>★</span><b>Favoriten</b><em>${favList().length}</em></button><button data-act="faView" data-v="rec"><span>${svgIc("pot")}</span><b>Rezepte</b><em>${recList().length}</em></button><button data-act="faView" data-v="kan"><span>${svgIc("plate")}</span><b>Kantine</b><em>${kanList().length}</em></button></div>
     <button class="m-btn pri" data-act="faView" data-v="text">Mit Claude: Foto oder Beschreibung</button>
     <div class="fe-save2 fa-bc"><button class="m-btn" data-act="bcScan" data-to="food">${BC_IC}Barcode</button><button class="m-btn" data-act="foodManual">Selbst eintragen</button></div>`);
-  { const r=$("fqRes"); if(r) r.innerHTML=fqResults(""); }
 }
 async function foodTextSearch(){
   const q=($("fdQ")||{}).value||""; const meal=foodMeal;
@@ -4025,12 +4024,7 @@ function foodIndex(){
 function fqResults(q){
   const s=String(q||"").toLowerCase().trim(); const idx=foodIndex().filter(o=>o.it);
   const row=(o,i)=>`<button class="fq-it" data-act="fqAdd" data-i="${i}"><div><b>${esc(o.it.name)}</b><span>E ${o.it.p} · K ${o.it.c} · F ${o.it.f}</span></div><em>${o.it.kcal}<small> kcal</small></em></button>`;
-  if(s.length<2){
-    const meal=typeof foodMeal!=="undefined" ? foodMeal : null; const ml=(MEALS.find(x=>x[0]===meal)||[])[1];
-    const L=idx.filter(o=>o.last>0).sort((a,b)=>((b.meals[meal]?1:0)-(a.meals[meal]?1:0)) || ((b.meals[meal]||b.last)-(a.meals[meal]||a.last))).slice(0,6);
-    UI.fqList=L.map(o=>o.it); if(!L.length) return "";
-    return `<div class="fq-h">Zuletzt gegessen</div>`+L.map(row).join("");
-  }
+  if(s.length<2){ UI.fqList=[]; return ""; }
   const words=s.split(/\s+/).filter(w=>w.length>=2 && !BLS_STOP.includes(w));
   const own=idx.map(o=>{ const n=o.it.name.toLowerCase(); if(!(words.length?words:[s]).every(w=>n.includes(w))) return null; return {...o, score:(n.startsWith(s)?100:0)+Math.min(30,o.n*3)+(o.fav?10:0)}; }).filter(Boolean).sort((a,b)=>b.score-a.score).slice(0,8);
   UI.fqList=own.map(o=>o.it);

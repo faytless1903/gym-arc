@@ -5103,7 +5103,8 @@ document.addEventListener("input", ev=>{ if(ev.target.id==="fe_g"||ev.target.id=
 function foodEditor(it, meal, idx, msg){
   if(it.main){ it={...it, ...it.main}; delete it.main; }
   it.sides=it.sides||[];
-  if(!it.comp && !it.p100 && !it.base && +it.kcal>0) it.base={kcal:+it.kcal, p:+it.p||0, c:+it.c||0, f:+it.f||0};
+  if(!it.comp && !it.p100 && !it.base && +it.kcal>0){ const x=+it.amt>0 ? +it.amt : 1;   // z. B. Favorit „2×“: Basis = 1 Portion, Auswahl steht auf 2
+    it.base={kcal:+it.kcal/x, p:(+it.p||0)/x, c:(+it.c||0)/x, f:(+it.f||0)/x}; it.amt=x; }
   UI.foodEdit={it, meal, idx};
   const f=(k,l,u)=>`<label class="nu-f"><span>${l}</span><div><input inputmode="decimal" id="fe_${k}" value="${it[k]??""}"><em>${u}</em></div></label>`;
   modal(`<h3>${idx<0?"Mahlzeit hinzufügen":"Mahlzeit bearbeiten"}</h3>

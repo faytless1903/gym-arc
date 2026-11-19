@@ -1,7 +1,7 @@
 // Gym Arc – Server-Funktion "push" (Supabase Edge Function)
 // Schickt eine Mitteilung aufs iPhone, wenn die Satzpause vorbei ist – auch bei gesperrtem Bildschirm.
 // Keine eigenen Secrets nötig: Die Push-Schlüssel (VAPID) werden beim ersten Aufruf erzeugt und in der Datenbank gespeichert.
-// Aktionen: key | subscribe | unsubscribe | schedule | cancel | tick (vom Zeitplaner) | test | morning / evening (vom Zeitplaner) | daily
+// Aktionen: key | subscribe | unsubscribe | schedule | cancel | tick (vom Zeitplaner) | test | minute (vom Zeitplaner) | daily
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -139,43 +139,37 @@ Deno.serve(async (req) => {
 
     if (action === "key") return json({ pub: (await keys()).pub });
 
-    if (action === "morning") { // vom Zeitplaner um 4:55 und 5:55 UTC – sendet nur, wenn es in Berlin 6:55 ist
+    if (action === "minute") { // vom Zeitplaner jede Minute: Wiegen / Eiweiß zur jeweils eingestellten Uhrzeit (Berlin)
       const now = new Date();
       const hm = new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
-      if (!b.force && !/^06:5[3-9]$/.test(hm)) return json({ ok: true, skipped: hm });
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-      const rows = await db("push_daily?weigh=eq.true&select=user_id");
+      const rows = await db("push_daily?select=user_id,weigh,weigh_time,protein,protein_time,p_goal,last_w,last_p");
       let n = 0;
       for (const r of rows) {
-        // schon gewogen? (Eintrag von heute im Dokument "body") → keine Erinnerung
-        let done = false;
-        try {
-          const d = await db("docs?user_id=eq." + r.user_id + "&id=eq.body&select=data");
-          done = !!(d[0] && d[0].data && (d[0].data.entries || []).some((e: { d: string }) => e && e.d === today));
-        } catch (_) { /* im Zweifel erinnern */ }
-        if (!done) n += await deliver(r.user_id, "Zeit zum Wiegen", "");
+        // Wiegen: nur wenn heute noch kein Gewicht eingetragen ist
+        if (r.weigh && r.weigh_time === hm && r.last_w !== today) {
+          await db("push_daily?user_id=eq." + r.user_id, { method: "PATCH", body: JSON.stringify({ last_w: today }) });
+          let done = false;
+          try {
+            const d = await db("docs?user_id=eq." + r.user_id + "&id=eq.body&select=data");
+            done = !!(d[0] && d[0].data && (d[0].data.entries || []).some((e: { d: string }) => e && e.d === today));
+          } catch (_) { /* im Zweifel erinnern */ }
+          if (!done) n += await deliver(r.user_id, "Zeit zum Wiegen", "");
+        }
+        // Eiweiß: nur wenn noch mindestens 15 g fehlen
+        if (r.protein && r.p_goal > 0 && r.protein_time === hm && r.last_p !== today) {
+          await db("push_daily?user_id=eq." + r.user_id, { method: "PATCH", body: JSON.stringify({ last_p: today }) });
+          let p = 0, ok = true;
+          try {
+            const d = await db("docs?user_id=eq." + r.user_id + "&id=eq.f" + today + "&select=data");
+            const day = (d[0] && d[0].data) || {};
+            for (const m of ["breakfast", "lunch", "dinner", "snack"]) for (const it of (day[m] || [])) p += +(it && it.p) || 0;
+          } catch (_) { ok = false; } // im Zweifel nicht stören
+          const gap = Math.round(r.p_goal - p);
+          if (ok && gap >= 15) n += await deliver(r.user_id, "Noch " + gap + " g Eiweiß offen", "");
+        }
       }
-      return json({ ok: true, sent: n });
-    }
-
-    if (action === "evening") { // vom Zeitplaner um 18:00 und 19:00 UTC – sendet nur, wenn es in Berlin 20:00 ist
-      const now = new Date();
-      const hm = new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
-      if (!b.force && !/^20:0[0-4]$/.test(hm)) return json({ ok: true, skipped: hm });
-      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-      const rows = await db("push_daily?protein=eq.true&p_goal=gt.0&select=user_id,p_goal");
-      let n = 0;
-      for (const r of rows) {
-        let p = 0;
-        try {
-          const d = await db("docs?user_id=eq." + r.user_id + "&id=eq.f" + today + "&select=data");
-          const day = (d[0] && d[0].data) || {};
-          for (const m of ["breakfast", "lunch", "dinner", "snack"]) for (const it of (day[m] || [])) p += +(it && it.p) || 0;
-        } catch (_) { continue; } // im Zweifel nicht stören
-        const gap = Math.round(r.p_goal - p);
-        if (gap >= 15) n += await deliver(r.user_id, "Noch " + gap + " g Eiweiß offen", "");
-      }
-      return json({ ok: true, sent: n });
+      return json({ ok: true, hm, sent: n });
     }
 
     if (action === "tick") { // vom Zeitplaner (pg_cron) alle 2 Sekunden, nur wenn eine Pause fällig ist
@@ -221,7 +215,9 @@ Deno.serve(async (req) => {
     if (action === "daily") {
       await db("push_daily?on_conflict=user_id", {
         method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify({ user_id: user.id, weigh: !!b.weigh, protein: !!b.protein, p_goal: Math.max(0, Math.min(400, Math.round(+b.pGoal || 0))) }),
+        body: JSON.stringify({ user_id: user.id, weigh: !!b.weigh, protein: !!b.protein, p_goal: Math.max(0, Math.min(400, Math.round(+b.pGoal || 0))),
+          ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.weighAt || "")) ? { weigh_time: String(b.weighAt) } : {}),
+          ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.proteinAt || "")) ? { protein_time: String(b.proteinAt) } : {}) }),
       });
       return json({ ok: true });
     }

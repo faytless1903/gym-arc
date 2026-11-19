@@ -21,7 +21,8 @@
       'body .modal-box,body #bcScan .bc-box{border-radius:26px 26px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}body .modal-box{max-height:calc(100dvh - var(--safe-t) - 8px)}' +
       '.gs-card{background:var(--tile);border-radius:14px;padding:0 14px}.gs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;font-weight:600;font-size:16px}.gs-row+.gs-row{border-top:1px solid var(--line)}.gs-row.dis{color:var(--muted)}' +
       '.gs-sw{position:relative;width:51px;height:31px;border-radius:16px;background:color-mix(in srgb,var(--muted) 45%,transparent);flex-shrink:0;transition:background .2s}.gs-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}.gs-sw.on{background:var(--accent)}.gs-sw.on::after{transform:translateX(20px)}.gs-sw:disabled{opacity:.45}' +
-      '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}</style>');
+      '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}' +
+      '.gs-tl{display:flex;align-items:center;gap:10px}.gs-time{font:inherit;font-size:16px;font-weight:600;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border:0;border-radius:8px;padding:4px 8px;min-width:0;width:auto;-webkit-appearance:none;appearance:none}.gs-time:disabled{color:var(--muted);background:transparent}</style>');
     document.write('<link rel="manifest" href="manifest.webmanifest">' +
       '<meta name="apple-mobile-web-app-capable" content="yes">' +
       '<meta name="mobile-web-app-capable" content="yes">' +
@@ -384,8 +385,8 @@
     ev.preventDefault(); ev.stopPropagation();
     var k = b.getAttribute("data-gpush");
     if(k === "pToggle"){ if(pushOn()) pushDisable(); else pushEnable(); }
-    else if(k === "wToggle"){ if(!pushOn()) return; try{ localStorage.setItem(WK, weighOn() ? "0" : "1"); }catch(_){} weighSync(weighOn() ? "Erinnerung um 6:55 an" : "Erinnerung um 6:55 aus"); rerender(); }
-    else if(k === "eToggle"){ if(!pushOn()) return; try{ localStorage.setItem(EK, protOn() ? "0" : "1"); }catch(_){} weighSync(protOn() ? "Eiweiß-Erinnerung um 20:00 an" : "Eiweiß-Erinnerung um 20:00 aus"); rerender(); }
+    else if(k === "wToggle"){ if(!pushOn()) return; try{ localStorage.setItem(WK, weighOn() ? "0" : "1"); }catch(_){} weighSync(weighOn() ? "Erinnerung um " + tLabel(wTime()) + " an" : "Wiege-Erinnerung aus"); rerender(); }
+    else if(k === "eToggle"){ if(!pushOn()) return; try{ localStorage.setItem(EK, protOn() ? "0" : "1"); }catch(_){} weighSync(protOn() ? "Eiweiß-Erinnerung um " + tLabel(eTime()) + " an" : "Eiweiß-Erinnerung aus"); rerender(); }
     else if(k === "on" && !pushOn()) pushEnable(); else if(k === "off" && pushOn()) pushDisable(); else if(k === "test") pushTest();
     else if(k === "wOn" || k === "wOff"){ try{ localStorage.setItem(WK, k === "wOn" ? "1" : "0"); }catch(_){} weighSync(false); rerender(); }
   }, true);
@@ -457,13 +458,21 @@
   var EK = "ga-eprot";
   function protOn(){ try{ return localStorage.getItem(EK) !== "0"; }catch(_){ return true; } }
   function pGoal(){ try{ var T = typeof nuTargets === "function" ? nuTargets() : null; return T && T.p > 0 ? Math.round(T.p) : 0; }catch(_){ return 0; } }
+  function tGet(k, d){ try{ var v = localStorage.getItem(k); return /^([01]\d|2[0-3]):[0-5]\d$/.test(v || "") ? v : d; }catch(_){ return d; } }
+  function wTime(){ return tGet(WK + "-time", "06:55"); }
+  function eTime(){ return tGet(EK + "-time", "20:00"); }
+  function tLabel(t){ return t.replace(/^0/, ""); }
   function weighSync(show){
     var g = pGoal();
-    callFn("push", { action: "daily", weigh: weighOn(), protein: protOn(), pGoal: g })
-      .then(function(){ try{ localStorage.setItem(WK + "-sync", "2"); localStorage.setItem(EK + "-goal", String(g)); }catch(_){} if(show) toast2(show); })
+    callFn("push", { action: "daily", weigh: weighOn(), protein: protOn(), pGoal: g, weighAt: wTime(), proteinAt: eTime() })
+      .then(function(){ try{ localStorage.setItem(WK + "-sync", "3"); localStorage.setItem(EK + "-goal", String(g)); }catch(_){} if(show) toast2(show); })
       .catch(function(){ if(show) toast2("Nicht gespeichert – keine Verbindung?"); });
   }
-  setTimeout(function(){ try{ if(sess && pushOn() && localStorage.getItem(WK + "-sync") !== "2") weighSync(false); }catch(_){} }, 4000);
+  setTimeout(function(){ try{ if(sess && pushOn() && localStorage.getItem(WK + "-sync") !== "3") weighSync(false); }catch(_){} }, 4000);
+  document.addEventListener("change", function(ev){ var t = ev.target; if(!t || !t.dataset || !t.dataset.gtime) return;
+    var v = String(t.value || "").slice(0, 5); if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return;
+    var isW = t.dataset.gtime === "w"; try{ localStorage.setItem((isW ? WK : EK) + "-time", v); }catch(_){}
+    weighSync((isW ? "Wiegen" : "Eiweiß") + " jetzt um " + tLabel(v)); });
   // Eiweißziel geändert (Gewicht, Cut, Angaben) → Server kennt das neue Ziel für die Erinnerung um 20:00
   setInterval(function(){ try{ if(sess && pushOn() && protOn() && String(pGoal()) !== (localStorage.getItem(EK + "-goal") || "")) weighSync(false); }catch(_){} }, 60000);
   function pushHTML(){
@@ -472,8 +481,8 @@
     if(Notification.permission === "denied") return h + '<div class="gs-row dis"><span>In den iPhone-Einstellungen blockiert</span></div></div>';
     var on = pushOn(), w = on && weighOn(), e = on && protOn();
     return h + '<div class="gs-row"><span>Satzpause vorbei' + (on ? ' <button class="gs-test" data-gpush="test">Testen</button>' : '') + '</span><button class="gs-sw' + (on ? " on" : "") + '" data-gpush="pToggle" role="switch" aria-checked="' + on + '" aria-label="Satzpause vorbei"></button></div>' +
-      '<div class="gs-row' + (on ? "" : " dis") + '"><span>Wiegen um 6:55</span><button class="gs-sw' + (w ? " on" : "") + '" data-gpush="wToggle" role="switch" aria-checked="' + w + '" aria-label="Wiegen um 6:55"' + (on ? "" : " disabled") + '></button></div>' +
-      '<div class="gs-row' + (on ? "" : " dis") + '"><span>Eiweiß um 20:00</span><button class="gs-sw' + (e ? " on" : "") + '" data-gpush="eToggle" role="switch" aria-checked="' + e + '" aria-label="Eiweiß-Erinnerung um 20:00"' + (on ? "" : " disabled") + '></button></div></div>';
+      '<div class="gs-row' + (on ? "" : " dis") + '"><span class="gs-tl">Wiegen<input type="time" class="gs-time" data-gtime="w" value="' + wTime() + '"' + (on ? "" : " disabled") + ' aria-label="Uhrzeit Wiege-Erinnerung"></span><button class="gs-sw' + (w ? " on" : "") + '" data-gpush="wToggle" role="switch" aria-checked="' + w + '" aria-label="Wiege-Erinnerung"' + (on ? "" : " disabled") + '></button></div>' +
+      '<div class="gs-row' + (on ? "" : " dis") + '"><span class="gs-tl">Eiweiß<input type="time" class="gs-time" data-gtime="e" value="' + eTime() + '"' + (on ? "" : " disabled") + ' aria-label="Uhrzeit Eiweiß-Erinnerung"></span><button class="gs-sw' + (e ? " on" : "") + '" data-gpush="eToggle" role="switch" aria-checked="' + e + '" aria-label="Eiweiß-Erinnerung"' + (on ? "" : " disabled") + '></button></div></div>';
   }
 
   /* ---------- Fortschrittsfotos (privat in Supabase Storage) + Vergleich durch Claude ---------- */

@@ -54,3 +54,18 @@ select cron.schedule('gym-arc-evening', '0 18,19 * * *', $$
     headers := '{"Content-Type":"application/json"}'::jsonb
   );
 $$);
+
+-- Erinnerungen zur selbst gewählten Uhrzeit (ersetzt gym-arc-morning / gym-arc-evening)
+alter table public.push_daily add column if not exists weigh_time text not null default '06:55';
+alter table public.push_daily add column if not exists protein_time text not null default '20:00';
+alter table public.push_daily add column if not exists last_w text;
+alter table public.push_daily add column if not exists last_p text;
+select cron.unschedule('gym-arc-morning');
+select cron.unschedule('gym-arc-evening');
+select cron.schedule('gym-arc-daily', '* * * * *', $$
+  select net.http_post(
+    url     := 'https://deutodqxafjzrsnqqszg.supabase.co/functions/v1/push',
+    body    := '{"action":"minute"}'::jsonb,
+    headers := '{"Content-Type":"application/json"}'::jsonb
+  );
+$$);

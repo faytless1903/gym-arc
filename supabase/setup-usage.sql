@@ -17,3 +17,6 @@ drop policy if exists "verbrauch lesen" on public.claude_usage;
 create policy "verbrauch lesen" on public.claude_usage for select to authenticated using (user_id = auth.uid());
 revoke all on public.claude_usage from anon;
 grant select on public.claude_usage to authenticated;
+
+-- Wofür eine Claude-Anfrage war (Liste in den Einstellungen)
+alter table public.claude_usage add column if not exists what text;

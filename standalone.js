@@ -22,6 +22,8 @@
       '.gs-card{background:var(--tile);border-radius:14px;padding:0 14px}.gs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;font-weight:600;font-size:16px}.gs-row+.gs-row{border-top:1px solid var(--line)}.gs-row.dis{color:var(--muted)}' +
       '.gs-sw{position:relative;width:51px;height:31px;border-radius:16px;background:color-mix(in srgb,var(--muted) 45%,transparent);flex-shrink:0;transition:background .2s}.gs-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}.gs-sw.on{background:var(--accent)}.gs-sw.on::after{transform:translateX(20px)}.gs-sw:disabled{opacity:.45}' +
       '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}' +
+      '.ga-use{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;padding:0;font:inherit;color:var(--muted);font-size:14px;line-height:1.4}.ga-use i{font-style:normal;color:var(--accent);font-size:18px;flex-shrink:0}' +
+      '.ga-ul{background:var(--tile);border-radius:14px;padding:0 14px}.ga-ur{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}.ga-ur+.ga-ur{border-top:1px solid var(--line)}.ga-ur b{display:block;font-size:15px;font-weight:650;color:var(--ink)}.ga-ur span{font-size:12px;color:var(--muted)}.ga-ur em{font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}' +
       '.gs-tl{display:flex;align-items:center;gap:10px}.gs-time{font:inherit;font-size:16px;font-weight:600;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border:0;border-radius:8px;padding:4px 8px;min-width:0;width:auto;-webkit-appearance:none;appearance:none}.gs-time:disabled{color:var(--muted);background:transparent}</style>');
     document.write('<link rel="manifest" href="manifest.webmanifest">' +
       '<meta name="apple-mobile-web-app-capable" content="yes">' +
@@ -445,10 +447,30 @@
     if(k === "pw"){ try{ if(typeof closeModal === "function") closeModal(); }catch(_){} showPwSet(); }
     else if(k === "out"){ window.gymArcLogout(); }
   }, true);
+  /* Liste der Claude-Anfragen dieses Monats (wofür, Modell, Kosten) */
+  async function usageList(){
+    if(!sess) return;
+    modal('<h3>Claude-Anfragen</h3><p class="nu-hint">Wird geladen …</p>');
+    try{
+      var d = new Date(), start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+      var t = await token(), r = await fetch(BASE + "/rest/v1/claude_usage?select=created_at,model,cost_usd,what,input_tokens,output_tokens&order=created_at.desc&created_at=gte." + encodeURIComponent(start),
+        { headers: { apikey: KEY, Authorization: "Bearer " + t }, cache: "no-store" });
+      var rows = r.ok ? await r.json() : [];
+      var ct = function(v){ var c = (+v || 0) * 100; return (c < 0.1 ? "<0,1" : c.toLocaleString("de-DE", { maximumFractionDigits: 1 })) + " ct"; };
+      var mdl = function(m){ return /haiku/.test(m) ? "Haiku" : /sonnet/.test(m) ? "Sonnet" : /opus/.test(m) ? "Opus" : m; };
+      var day = function(s){ var x = new Date(s); return x.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + ", " + x.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); };
+      var sum = rows.reduce(function(a, x){ return a + (+x.cost_usd || 0); }, 0);
+      modal('<h3>Claude-Anfragen</h3><p class="pc-sub" style="margin:-4px 0 12px">Diesen Monat · ' + rows.length + ' · ca. ' + sum.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $</p>' +
+        (rows.length ? '<div class="ga-ul">' + rows.map(function(x){ return '<div class="ga-ur"><div><b>' + esc2(x.what || "Ältere Anfrage") + '</b><span>' + day(x.created_at) + ' · ' + mdl(x.model) + '</span></div><em>' + ct(x.cost_usd) + '</em></div>'; }).join("") + '</div>'
+          : '<p class="nu-hint">Diesen Monat noch keine Anfragen.</p>') +
+        '<button class="m-btn" data-act="settings" style="margin-top:12px">Zurück</button>');
+    }catch(e){ modal('<h3>Claude-Anfragen</h3><p>Konnte nicht geladen werden.</p><button class="m-btn" data-act="settings">Zurück</button>'); }
+  }
+  document.addEventListener("click", function(ev){ var b = ev.target.closest && ev.target.closest("[data-guse]"); if(!b) return; ev.preventDefault(); ev.stopPropagation(); usageList(); }, true);
   window.gymArcPush = { html: function(){
     var acc = '<div class="fv-l" style="margin-top:18px">Konto</div>' +
       '<div class="st-bk"><button class="m-btn" data-gacc="pw">Passwort</button><button class="m-btn" data-gacc="out">Abmelden</button></div>' +
-      '<div class="fv-l" style="margin-top:18px">Claude</div><p class="st-hint" id="gaUse">' + usageText(usageCache()) + '</p>';
+      '<div class="fv-l" style="margin-top:18px">Claude</div><button class="ga-use" data-guse="1"><span id="gaUse">' + usageText(usageCache()) + '</span><i aria-label="Anfragen anzeigen">ⓘ</i></button>';
     setTimeout(usageLoad, 0);
     return acc + healthHTML() + pushHTML();
   } };

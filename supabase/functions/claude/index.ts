@@ -22,13 +22,40 @@ function costUSD(model: string, u: { input_tokens?: number; output_tokens?: numb
   const big = inp > 100000 && p.inBig;
   return (inp * (big ? p.inBig! : p.in) + (u.output_tokens || 0) * (big ? p.outBig! : p.out)) / 1e6;
 }
-async function logUsage(userId: string, model: string, u: Record<string, number>) {
+// Wofür war die Anfrage? (für die Liste in den Einstellungen – erkannt am Anfang des Auftrags)
+const WHAT: [RegExp, string][] = [
+  [/Kraftsport- und Ernährungscoach in der App/, "Coach-Chat"],
+  [/Fortschrittsfotos/, "Fotovergleich"],
+  [/Körperfettanteil/, "Körperfett per Foto"],
+  [/Foto einer Mahlzeit/, "Essen per Foto"],
+  [/beschreibt EIN Gericht/, "Essen per Beschreibung"],
+  [/Ordne jedem Bestandteil|Bundeslebensmittelschlüssel/, "Nährwerte zuordnen (BLS)"],
+  [/Zutaten eines Rezepts/, "Rezept-Zutaten zuordnen"],
+  [/Webseiten-Text das Rezept/, "Rezept-Import per Link"],
+  [/Auf dem Foto ist ein Rezept/, "Rezept per Foto"],
+  [/Nährwerte für das GESAMTE Rezept/, "Rezept berechnen"],
+  [/Beilage zu einer Mahlzeit/, "Beilage"],
+  [/Ernährungscoach für einen Kraftsportler im Kaloriendefizit/, "Cut-Tipps"],
+  [/gespeicherten Rezept in einer Ernährungs-App/, "Rezept-Chat"],
+  [/Zubereitungsanleitung/, "Rezept-Anleitung"],
+  [/Supermarkt-Abteilung/, "Einkaufsliste sortieren"],
+  [/stagniert/, "Stagnation-Analyse"],
+  [/Bewerte GENAU diese eine Übung/, "Übungs-Analyse"],
+  [/Krafttrainings-Coach\. Analysiere die bisherigen Trainingsdaten/, "Trainingsempfehlungen"],
+  [/Trainingsdokumentation|Mitschrift von Krafttrainings/, "Trainings-Import"],
+  [/Nährwerttabelle|Nährwertangaben|Etikett/i, "Nährwerttabelle lesen"],
+];
+function whatOf(text: string, imgs: number) {
+  for (const [re, l] of WHAT) if (re.test(text)) return l;
+  return imgs ? "Foto-Analyse" : "Sonstiges";
+}
+async function logUsage(userId: string, model: string, u: Record<string, number>, what = "") {
   try {
     const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     await fetch(Deno.env.get("SUPABASE_URL") + "/rest/v1/claude_usage", {
       method: "POST",
       headers: { apikey: SR, Authorization: "Bearer " + SR, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ user_id: userId, model, input_tokens: u.input_tokens || 0, output_tokens: u.output_tokens || 0, cost_usd: costUSD(model, u) }),
+      body: JSON.stringify({ user_id: userId, model, input_tokens: u.input_tokens || 0, output_tokens: u.output_tokens || 0, cost_usd: costUSD(model, u), what: what || null }),
     });
   } catch (_) { /* Zählen darf nie die Antwort verhindern */ }
 }
@@ -94,7 +121,8 @@ Deno.serve(async (req) => {
       const code = r.status === 429 || r.status === 529 ? "rate_limited" : "unavailable";
       return json({ code, message: (d && d.error && d.error.message) || "Claude-Fehler " + r.status }, r.status === 429 ? 429 : 502);
     }
-    if (d.usage) await logUsage(user.id, model, d.usage);
+    const first = Array.isArray(b.messages) && b.messages.length ? String(b.messages[0].content || "") : String(b.prompt || "");
+    if (d.usage) await logUsage(user.id, model, d.usage, whatOf(first.slice(0, 3000), images.length));
     const text = (d.content || []).filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("");
     return json({ text, truncated: d.stop_reason === "max_tokens", model });
   } catch (e) {

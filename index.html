@@ -4015,7 +4015,9 @@ function favAdd(id){
 /* Alles, was du schon gegessen hast – für die Schnellsuche */
 function foodIndex(){
   const m=new Map(); const add=(it,t,fav,meal)=>{ if(!it || !it.name || !(+it.kcal>0)) return; const k=it.name.toLowerCase().trim(); const o=m.get(k)||{n:0,last:0,fav:false,meals:{}};
-    o.n++; if(t>=o.last){ o.last=t; o.it=pickVals(it); } o.fav=o.fav||fav; if(meal){ o.meals[meal]=Math.max(o.meals[meal]||0, t); } m.set(k,o); };
+    // immer 1 Portion merken: „2× Shake“ (206 kcal) → 1 Shake (103 kcal); Favoriten gelten mit ihren eigenen Werten
+    const x=+it.amt>1 && !it.p100 ? +it.amt : 1; const one=x>1 ? {...it, kcal:+it.kcal/x, p:(+it.p||0)/x, c:(+it.c||0)/x, f:(+it.f||0)/x, parts:String(it.parts||"").replace(/^\d+(?:[.,]\d+)?×\s*/,"")} : it;
+    o.n++; if(fav){ o.it=pickVals(one); o.favIt=true; } else if(t>=o.last){ o.last=t; if(!o.favIt) o.it=pickVals(one); } o.fav=o.fav||fav; if(meal){ o.meals[meal]=Math.max(o.meals[meal]||0, t); } m.set(k,o); };
   Object.keys(S.food||{}).forEach(k=>{ const t=new Date(k+"T12:00:00").getTime(); MEALS.forEach(([ml])=>((S.food[k]||{})[ml]||[]).forEach((it,i)=>add(it,(+it.t||t)+i,false,ml))); });
   favList().forEach(f=>add(f,0,true)); Object.values((S.nutri&&S.nutri.std)||{}).flat().forEach(it=>add(it,0,false));
   return [...m.values()];

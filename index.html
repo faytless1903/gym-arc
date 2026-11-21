@@ -3395,15 +3395,15 @@ function stagBox(ex, mode="full"){
   const c=(S.stagAi||{})[ex.id], key=stagKey(ex.id), fresh=c && c.key===key;
   if(mode==="short"){ const t=fresh && c.status==="done" ? c.item.title : null;
     return `<div class="stg-box" data-ex="${ex.id}" data-mode="short"><div class="stg-h">⚠ Seit ${st.weeks} Wochen kein Fortschritt${t?` · <b>${esc(t)}</b>`:""}</div><div class="stg-x" style="font-size:13px;color:var(--muted)">${t?esc(c.item.text):"Unter „Übungen“ analysiert Claude, was du hier ändern solltest."}</div></div>`; }
-  if(!fresh) setTimeout(()=>stagAnalyze(ex),0);
-  if(!fresh || c.status==="loading")
+  // Claude nur auf Knopfdruck (spart Credits) – bis dahin die Regel-Analyse
+  if(fresh && c.status==="loading")
     return `<div class="stg-box" data-ex="${ex.id}" data-mode="full"><div class="stg-h">⚠ Seit ${st.weeks} Wochen kein Fortschritt</div><div class="rec-status" style="margin:8px 0 0"><span class="rs-dot spin"></span>Claude analysiert diese Übung …</div></div>`;
   const pl=stagPlanFor(ex); if(!pl) return "";
   const at=stagApplyTxt(pl.apply, ex);
   return `<div class="stg-box" data-ex="${ex.id}" data-mode="full">
     <div class="stg-h">⚠ Seit ${st.weeks} Wochen kein Fortschritt · Nächstes Mal: <b>${esc(pl.title)}</b></div>
     <div class="stg-x">${esc(pl.text)}</div>
-    <div class="stg-f"><span>${pl.src==="claude"?"Claude-Analyse dieser Übung":"Regel-Analyse (Claude nicht erreichbar)"}</span>${pl.apply?`<button class="rc-apply" data-act="stgApply" data-ex="${ex.id}">Übernehmen${at?": "+esc(at):""}</button>`:""}</div>
+    <div class="stg-f"><span>${pl.src==="claude"?"Claude-Analyse dieser Übung":fresh&&c.status==="error"?"Regel-Analyse (Claude nicht erreichbar)":"Regel-Analyse"}</span>${pl.src!=="claude"?`<button class="link sm" data-act="stgAiGo" data-ex="${ex.id}">Mit Claude analysieren</button>`:""}${pl.apply?`<button class="rc-apply" data-act="stgApply" data-ex="${ex.id}">Übernehmen${at?": "+esc(at):""}</button>`:""}</div>
   </div>`;
 }
 function stagApply(id){
@@ -5527,8 +5527,9 @@ function libRecCard(id){
       const key = String(lastNFor(id,1)[0].date); const c=(S.recAi||{})[id];
       if(c && c.key===key && c.status==="done") r = {...c.item, src:"claude"};
       else if(c && c.key===key && c.status==="loading") status = `<div class="rec-status" style="margin:8px 0 0"><span class="rs-dot spin"></span>Claude prüft die Situation genauer …</div>`;
-      else if(c && c.key===key && c.status==="error") status = `<div class="rec-status" style="margin:8px 0 0"><span class="rs-dot"></span>Genaue Analyse nicht möglich – Regel-Empfehlung</div>`;
-      else { status = `<div class="rec-status" style="margin:8px 0 0"><span class="rs-dot spin"></span>Claude prüft die Situation genauer …</div>`; setTimeout(()=>analyzeExClaude(ex, r, key), 0); }
+      else if(c && c.key===key && c.status==="error") status = `<div class="rec-status" style="margin:8px 0 0;gap:10px;flex-wrap:wrap"><span class="rs-dot"></span>Genaue Analyse nicht möglich – Regel-Empfehlung ${`<button class="rc-apply" style="margin-left:0" data-act="exAiGo" data-ex="${id}">Nochmal versuchen</button>`}</div>`;
+      // Claude nur auf Knopfdruck (spart Credits) – bis dahin gilt die Regel-Empfehlung
+      else status = `<div class="rec-status" style="margin:8px 0 0;gap:10px;flex-wrap:wrap"><span class="rs-dot"></span>Unklarer Fall – Regel-Empfehlung ${`<button class="rc-apply" style="margin-left:0" data-act="exAiGo" data-ex="${id}">Mit Claude genauer prüfen</button>`}</div>`;
     }
     const st = stagnation(ex);
     return `<div id="libRec" data-ex="${id}"><div class="rcard ${r.action}" style="margin-top:12px">
@@ -5857,6 +5858,11 @@ document.addEventListener("click", ev=>{
       } else renderEx();
       break; }
     case "bodyDel": { const d=b.dataset.d; S.body=(S.body||[]).filter(x=>x.d!==d); saveBody(); renderHome(); const det=document.querySelector(".blist"); if(det) det.open=true; break; }
+    case "exAiGo": { const id=b.dataset.ex; const pe=PLAN.workouts.flatMap(w=>w.exercises).find(e=>e.id===id); const ex=pe || (BASE_EX[id] && BASE_EX[id].reps ? {...BASE_EX[id], id} : null);
+      const l=ex && lastNFor(id,1)[0]; if(!l) break; const key=String(l.date);
+      if(S.recAi && S.recAi[id] && S.recAi[id].status==="error") delete S.recAi[id];
+      analyzeExClaude(ex, {...baselineRec(ex), src:"rule"}, key); const el=$("libRec"); if(el && el.dataset.ex===id) el.outerHTML=libRecCard(id); break; }
+    case "stgAiGo": { const id=b.dataset.ex; const ex=PLAN.workouts.flatMap(w=>w.exercises).find(e=>e.id===id); if(ex) stagAnalyze(ex); break; }
     case "retryAi": if($("modal").classList.contains("open")) closeModal(); analyzeWithClaude(); break;
     case "applyRec": { const r=recFor(UI.ex); if(r && r.kg!=null){ a.ex[UI.ex].sets.forEach(s=>{ if(!s.done) s.kg=r.kg; }); persist(); renderEx(); toast(fmtNum(r.kg)+" kg übernommen"); } break; }
     case "finish": finish(); break;

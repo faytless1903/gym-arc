@@ -534,6 +534,11 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .set-r.active .chk{background:var(--surface);color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
 .set-r.done .chk{background:var(--accent);color:#fff;box-shadow:none}
 .set-r.pop .chk{animation:ckPop .42s cubic-bezier(.2,.9,.3,1.4)}
+/* Übersprungene Sätze: zählen nicht, werden nicht gespeichert */
+.set-r.skip input,.set-r.skip .rm{opacity:.35;text-decoration:line-through}
+.set-r.done.skip .chk{background:var(--tile);color:var(--muted);font-size:12px;font-weight:700}
+.skip-row{display:flex;gap:8px;margin:4px 0 8px}
+.skip-row button{flex:1;height:40px;border-radius:12px;background:var(--tile);color:var(--muted);font-size:14px;font-weight:600}
 .set-r.pop .chk path{stroke-dasharray:24;stroke-dashoffset:24;animation:ckDraw .32s .08s ease-out forwards}
 .set-r.pop{animation:rowFlash .6s ease-out}
 @keyframes ckPop{0%{transform:scale(.82)}55%{transform:scale(1.1)}100%{transform:scale(1)}}
@@ -2213,7 +2218,7 @@ function preFatigue(exId, prev){ const X=EX_MUSCLES[exId]||{}; const tot=Object.
   return prev.reduce((t,[pid,f])=>t+exOverlap(pid,exId)/tot*f,0); }
 function orderEffect(a, w, exId){ try{
   const x=a.ex[exId]; if(!x || !x.t0 || !x.sets.some(s=>s.done)) return null;
-  const done=id=>(a.ex[id]?a.ex[id].sets.filter(s=>s.done).length:0);
+  const done=id=>(a.ex[id]?a.ex[id].sets.filter(s=>s.done && !s.skip).length:0);
   const real=w.exercises.filter(o=>o.id!==exId && a.ex[o.id] && a.ex[o.id].t0 && a.ex[o.id].t0<x.t0).map(o=>[o.id, Math.min(1,done(o.id)/3)]);
   const i=w.exercises.findIndex(o=>o.id===exId); const plan=w.exercises.slice(0,i).map(o=>[o.id, Math.min(1,(o.sets||3)/3)]);
   const d=preFatigue(exId, real)-preFatigue(exId, plan);
@@ -2255,7 +2260,7 @@ function renderAfterBlock(){ if(UI.ex) renderEx(); else renderWorkout(); updateF
 function planEx(a){ const w=W(a.workoutId); return w ? w.exercises.map(e=>a.ex[e.id]).filter(Boolean) : Object.values(a.ex); }
 function allSetsDone(a){ const l=planEx(a); return l.length>0 && l.every(y=>y.sets.every(z=>z.done)); }
 function progressOf(a){
-  let done=0,total=0; planEx(a).forEach(x=>{ x.sets.forEach(s=>{ total++; if(s.done) done++; }); });
+  let done=0,total=0; planEx(a).forEach(x=>{ x.sets.forEach(s=>{ if(s.skip) return; total++; if(s.done) done++; }); });
   return {done,total};
 }
 function startWorkout(wid){
@@ -2336,12 +2341,12 @@ function closeEx(){ UI.ex=null; $("exsheet").classList.remove("open"); $("scrim2
 function activeIdx(x){ return x.sets.findIndex(s=>!s.done); }
 function setRow(e, s, i, label, isActive, warm, locked){
   const rm = warm ? null : repMax(num(s.kg), num(s.reps), e.reps);
-  return `<div class="set-r ${s.done?"done":""} ${isActive?"active":""} ${warm?"warm":""} ${UI.pop && UI.pop===(warm?"w:":"")+e.id+":"+i?"pop":""}">
+  return `<div class="set-r ${s.done?"done":""} ${s.skip?"skip":""} ${isActive?"active":""} ${warm?"warm":""} ${UI.pop && UI.pop===(warm?"w:":"")+e.id+":"+i?"pop":""}">
     <div class="num">${label}</div>
     <input type="text" inputmode="decimal" placeholder="${e.equip==="Körpergewicht"?"0":"–"}" value="${fmtNum(num(s.kg))}" data-in="kg" data-i="${i}" ${warm?'data-warm="1"':""}>
     <input type="text" inputmode="numeric" placeholder="${e.reps}" value="${s.reps??""}" data-in="reps" data-i="${i}" ${warm?'data-warm="1"':""}>
     <div class="rm" data-rm="${warm?"w":i}">${rm==null?"–":fmtNum(rm)}</div>
-    <button class="chk ${locked?"locked":""}" data-act="${warm?"checkWarm":"check"}" data-i="${i}" aria-label="Satz abhaken">${IC.check}</button>
+    <button class="chk ${locked?"locked":""}" data-act="${warm?"checkWarm":"check"}" data-i="${i}" aria-label="${s.skip?"Übersprungen – rückgängig":"Satz abhaken"}">${s.skip?"Skip":IC.check}</button>
   </div>`;
 }
 function stepper(e,i){
@@ -2383,6 +2388,7 @@ function _renderEx(){
         <div class="set-h"><span>#</span><span>KG</span><span>WDH</span><span>${e.reps}RM</span><span></span></div>
         ${(x.wu||[]).length? `<div class="wu-h">Aufwärmsatz · danach 1:30 Pause</div>`+x.wu.map((s,i)=>setRow(e,s,i,"A",false,true,false)).join("")+`<div class="wu-h">Arbeitssätze</div>` : ""}
         ${x.sets.map((s,i)=>{ const lastDone = ai===-1 ? x.sets.length-1 : ai-1; return setRow(e,s,i,i+1,i===ai,false, s.done ? i!==lastDone : i!==ai) ; }).join("")}
+        ${ai!==-1 ? `<div class="skip-row"><button data-act="skipSet">Satz überspringen</button>${x.sets.filter(s=>!s.done).length>1?`<button data-act="skipEx">Übung überspringen</button>`:""}</div>` : ""}
       </div>
       ${prev}
       ${exSessions(exId).length>=2? `<div class="prev"><div class="prev-t rng-h">Verlauf${rangeToggle(exId, UI.rangeSheet||"4w", "sheet")}</div>${exChartBlock(exId,true,UI.rangeSheet||"4w")}</div>`:""}
@@ -2824,8 +2830,8 @@ function scoreSession(a){
   let planned=0, done=0, qSum=0, qN=0, pSum=0, pN=0;
   const perEx=[];
   w.exercises.forEach(e=>{
-    const x=a.ex[e.id]; planned += e.sets;
-    const ds = x.sets.filter(s=>s.done);
+    const x=a.ex[e.id]; const skipped=x.sets.filter(s=>s.skip).length; planned += Math.max(0, e.sets - skipped);   // übersprungene Sätze zählen nicht
+    const ds = x.sets.filter(s=>s.done && !s.skip);
     done += Math.min(ds.length, e.sets);
     ds.forEach(s=>{
       const r=num(s.reps)||0, T=e.reps;
@@ -2842,7 +2848,7 @@ function scoreSession(a){
     pSum+=v; pN++; perEx.push({id:e.id,trend: v===1?"up":v===0.75?"same":"down"});
   });
   if(!done) return null;
-  const V = Math.min(1, done/planned), Q = qN? qSum/qN : 0, P = pN? pSum/pN : 0.75;
+  const V = planned>0 ? Math.min(1, done/planned) : 1, Q = qN? qSum/qN : 0, P = pN? pSum/pN : 0.75;
   const score = Math.round(100*(0.4*V + 0.3*Q + 0.3*P));
   return {score, V:Math.round(V*100), Q:Math.round(Q*100), P:Math.round(P*100),
     up: perEx.filter(p=>p.trend==="up").length, down: perEx.filter(p=>p.trend==="down").length};
@@ -5578,7 +5584,7 @@ function closeModal(){ const M=$("modal"); if(!M.classList.contains("open")) ret
 function closeModalUser(){ UI.mealOpen=null; closeModal(); }
 function finishAsk(){
   const a=S.active; const {done,total}=progressOf(a);
-  let vol=0; planEx(a).forEach(x=>x.sets.forEach(s=>{ if(s.done) vol+=(num(s.kg)||0)*(num(s.reps)||0); }));
+  let vol=0; planEx(a).forEach(x=>x.sets.forEach(s=>{ if(s.done && !s.skip) vol+=(num(s.kg)||0)*(num(s.reps)||0); }));
   modal(`<h3>Training beenden?</h3>
     <p>${done<total? `${total-done} Sätze sind noch offen. Nur abgehakte Sätze werden gespeichert.` : "Stark – alle Sätze erledigt!"}</p>
     ${(()=>{const sc=scoreSession(a); return sc? `<div class="sprev">Aktuelle Bewertung: <b>${sc.score} %</b></div>`:"";})()}
@@ -5592,7 +5598,7 @@ function finish(){
   const h = { id: String(a.start), workoutId:w.id, name:w.name, start:a.start, end:Date.now(), score: sc,
     exercises: w.exercises.map(e=>{ const x=a.ex[e.id]; const sets=[];
       (x.wu||[]).filter(s=>s.done).forEach(s=>sets.push({kg:num(s.kg), reps:num(s.reps), warm:true}));
-      x.sets.filter(s=>s.done).forEach(s=>sets.push({kg:num(s.kg), reps:num(s.reps)}));
+      x.sets.filter(s=>s.done && !s.skip).forEach(s=>sets.push({kg:num(s.kg), reps:num(s.reps)}));
       const o={exId:e.id, name:e.name, sets}; const od=orderEffect(a, w, e.id); if(od) o.ord=od; return o; }) };
   if(!h.exercises.some(e=>e.sets.length)){ toast("Keine Sätze abgehakt – nichts gespeichert"); }
   else { S.history.unshift(h); pushHistory(h); }
@@ -5759,21 +5765,30 @@ document.addEventListener("click", ev=>{
         if(s.reps==null || s.reps==="") s.reps = e.reps;           // Ziel-Wdh übernehmen, falls leer
         if(s.kg==null || s.kg==="") s.kg = e.equip==="Körpergewicht"?0:null;
         s.done=true; UI.ckT=Date.now(); if(!x.t0) x.t0=Date.now(); if(a.blocked) delete a.blocked[UI.ex]; UI.pop=UI.ex+":"+i; setTimeout(()=>{ UI.pop=null; },700);
-        try{ let best=prBest(UI.ex); x.sets.forEach((o,j)=>{ if(o.done && j<i) best=prMerge(best, num(o.kg), num(o.reps)); });
+        try{ let best=prBest(UI.ex); x.sets.forEach((o,j)=>{ if(o.done && !o.skip && j<i) best=prMerge(best, num(o.kg), num(o.reps)); });
           const pr=prCheck(best, num(s.kg), num(s.reps)); if(pr) setTimeout(()=>prCelebrate(e.name, pr), 150); }catch(_){}
         // Werte in nächsten leeren Satz übernehmen
         const n = x.sets[i+1]; if(n && !n.done){ if(n.kg==null) n.kg=s.kg; if(n.reps==null) n.reps=s.reps; }
         const allDone = allSetsDone(a);
         if(!allDone) startRest(e.rest); else { persist(); renderEx(); updateFab(); setTimeout(()=>{ if(S.active && allSetsDone(S.active)) finish(); }, 700); break; }
       } else {
-        modal(`<h3>Satz ${i+1} rückgängig?</h3><p>${fmtNum(num(s.kg)??0)} kg × ${s.reps??0} Wdh wird wieder als offen markiert.</p>
+        modal(`<h3>Satz ${i+1} rückgängig?</h3><p>${s.skip?"Der übersprungene Satz":`${fmtNum(num(s.kg)??0)} kg × ${s.reps??0} Wdh`} wird wieder als offen markiert.</p>
           <button class="m-btn pri" data-act="uncheckOk" data-i="${i}">Rückgängig machen</button><button class="m-btn" data-act="closeModal">Abbrechen</button>`);
         break;
       }
       persist(); renderEx(); updateFab(); break;
     }
+    case "skipSet": case "skipEx": {
+      const x=a.ex[UI.ex]; const ai=activeIdx(x); if(ai===-1) break;
+      x.sets.forEach((s,i)=>{ if(!s.done && (act==="skipEx" || i===ai)){ s.done=true; s.skip=true; } });
+      UI.ckT=Date.now();
+      persist(); renderEx(); updateFab();
+      toast(act==="skipEx" ? "Übung übersprungen – zählt nicht" : "Satz übersprungen – zählt nicht");
+      if(allSetsDone(a)) setTimeout(()=>{ if(S.active && allSetsDone(S.active)) finishAsk(); }, 500);
+      break;
+    }
     case "uncheckOk": {
-      const x=a.ex[UI.ex]; const s=x.sets[+b.dataset.i]; if(s) s.done=false;
+      const x=a.ex[UI.ex]; const s=x.sets[+b.dataset.i]; if(s){ s.done=false; delete s.skip; }
       closeModal(); persist(); renderEx(); updateFab(); break;
     }
     case "checkWarm": {

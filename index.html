@@ -2541,6 +2541,12 @@ function lockSync(){ const a=S.active; if(!a) return; const w=W(a.workoutId); if
   w.exercises.forEach(e=>{ const b=a.base&&a.base[e.id]; const lk=planLock(e) || (b && b.kg!=null && !b.unclear && a.ai && a.ai.status==="done" ? {action:b.action, kg:b.kg, reason:b.reason} : null); const x=a.ex[e.id]; if(!lk||!x) return;
     if(a.ai && a.ai.items && a.ai.items[e.id] && a.ai.items[e.id].kg!==lk.kg){ a.ai.items[e.id]={action:lk.action, kg:lk.kg, reason:lk.reason}; ch=true; }
     x.sets.forEach(s=>{ if(!s.done && !s.edited && s.kgAuto!==false && num(s.kg)!==lk.kg){ s.kg=lk.kg; s.kgAuto=true; ch=true; } }); });
+  // Automatisch vorausgefüllte, noch offene Sätze an die Gewichtsstufen des Geräts anpassen (z. B. 82,5 -> 85 bei 5-kg-Schritten)
+  w.exercises.forEach(e=>{ const x=a.ex[e.id];
+    [a.base&&a.base[e.id], a.ai&&a.ai.items&&a.ai.items[e.id]].forEach(r=>{ if(r && r.kg>0){ const n=snapW(e, r.kg); if(n>0 && Math.abs(n-r.kg)>0.01){ r.kg=n; ch=true; } } });
+    if(!x) return;
+    [...(x.wu||[]), ...(x.sets||[])].forEach(s=>{ if(s.done || s.edited || s.kgAuto===false || s.kg==null || s.kg==="") return;
+      const v=num(s.kg); if(!(v>0)) return; const n=snapW(e, v); if(n>0 && Math.abs(n-v)>0.01){ s.kg=n; ch=true; } }); });
   if(ch) persist(); }
 function recFor(exId){
   const a=S.active; if(!a) return null;

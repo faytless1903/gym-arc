@@ -2403,8 +2403,13 @@ function snapStack(e, v, mode="near", ref=v){ const L=stackOf(e); if(!L) return 
 function snapW(e, v){ return stackOf(e) ? snapStack(e, v) : roundTo(v, STEP(e)); }
 const STEP = e => {
   if(stackOf(e)){ const L=stackOf(e); let m=Infinity; for(let i=1;i<L.length;i++) m=Math.min(m, L[i]-L[i-1]); return isFinite(m)? m : 7; }
-  // An fast allen Geräten gibt es Zusatzscheiben à 2,5 kg -> kleinste Steigerung 2,5 kg
-  if(e.equip!=="Körpergewicht") return 2.5;
+  // Geräte/Stangen: Scheiben kommen auf beide Seiten bzw. Steckgewichte in 5er-Stufen -> 5 kg.
+  // 2,5 kg nur bei Kurzhanteln/Kettlebells oder wenn bei dieser Übung zuletzt wirklich Zwischenstufen (z. B. 27,5) trainiert wurden.
+  if(e.equip!=="Körpergewicht"){
+    if(["Kurzhanteln","Kettlebells","Scheibe","Medizinball"].includes(e.equip)) return 2.5;
+    const odd=lastNFor(e.id,10).some(s=>s.sets.some(x=>(x.kg||0)>0 && Math.abs((x.kg/5)-Math.round(x.kg/5))>1e-6));
+    return odd ? 2.5 : 5;
+  }
   const all=usedWeights(e.id); const last=lastNFor(e.id,1)[0];
   const cur = last ? Math.max(...last.sets.map(s=>s.kg||0)) : 0;
   const ws = cur>0 ? all.filter(x=>x>=cur*0.75 && x<=cur*1.3) : all;

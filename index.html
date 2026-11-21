@@ -4495,7 +4495,9 @@ async function bcFound(code){
   try{ navigator.vibrate && navigator.vibrate(60); }catch(_){}
   const m=$("bcMsg"); if(m) m.textContent=`Gefunden: ${code} – Nährwerte werden geladen …`;
   let prod=null, err=null;
-  try{ prod=await offLookup(code); }catch(e){ err=e; }
+  const own=((S.nutri||{}).eanFix||{})[code];
+  if(own && own.p100) prod={name:own.name, p100:{...own.p100}, pack:own.pack||null, own:true};
+  else { try{ prod=await offLookup(code); }catch(e){ err=e; } }
   bcClose();
   const note = err ? "Produktdaten konnten nicht geladen werden (keine Verbindung?) – fotografiere die Nährwerttabelle oder trag die Werte ein."
     : !prod ? `Barcode ${code} ist bei Open Food Facts nicht bekannt – fotografiere die Nährwerttabelle oder trag die Werte ein.`
@@ -4507,7 +4509,7 @@ async function bcFound(code){
   if(to==="food"){
     if(note){ toast(note.split(" – ")[0]); return; }
     const P=prod.p100, g=prod.pack && prod.pack<=1000 ? prod.pack : 100, q=g/100;
-    foodEditor({name:prod.name||("Produkt "+code), p100:{...P}, ...(prod.pack?{pack:prod.pack}:{}), grams:g, kcal:Math.round(P.kcal*q), p:Math.round(P.p*q), c:Math.round(P.c*q), f:Math.round(P.f*q), parts:`${g} g · je 100 g: ${Math.round(P.kcal)} kcal`, ean:code}, foodMeal, -1);
+    foodEditor({name:prod.name||("Produkt "+code), p100:{...P}, ...(prod.pack?{pack:prod.pack}:{}), grams:g, kcal:Math.round(P.kcal*q), p:Math.round(P.p*q), c:Math.round(P.c*q), f:Math.round(P.f*q), parts:`${g} g · je 100 g: ${Math.round(P.kcal)} kcal`, ean:code, ...(prod.own?{eanOwn:true}:{})}, foodMeal, -1);
     return; }
   if(to==="rec"){ const R=UI.recEdit; if(!R) return; try{ recRead(); }catch(_){}
     if(!note){ R.lab=(R.lab||[]).concat([{name:prod.name||("Produkt "+code), g:0, k100:{...prod.p100}, ean:code}]); recEditor(R, `${prod.name||"Produkt"} hinzugefügt (Open Food Facts) – trag noch die Gramm ein.`); recLabTotals(); }
@@ -5155,6 +5157,7 @@ function foodEditor(it, meal, idx, msg){
     ${it.comp?`<div class="re-sum" id="feSum">${sumRow("Nährwerte", it)}</div>`:""}
     <div class="nu-grid" ${it.comp?'style="display:none"':""}>${f("kcal","Kalorien","kcal")}${f("p","Eiweiß","g")}${f("c","Kohlenhydrate","g")}${f("f","Fett","g")}</div>
     ${sidesBox(it)}
+    ${it.ean&&!it.comp?`<p class="nu-hint">${it.eanOwn?"Deine korrigierten Werte für diesen Barcode.":"Werte aus Open Food Facts (Community-Daten, teils veraltet) – kurz mit der Packung vergleichen. Wenn du sie änderst, merkt sich die App das für diesen Barcode."}</p>`:""}
     ${it.ai&&!it.label&&!it.comp?`<p class="nu-hint">Schätzung von Claude – bitte prüfen und bei Bedarf anpassen.</p>`:""}${it.label?`<div class="fd-ok">✓ Von der Nährwerttabelle abgelesen</div>`:""}
     <button class="m-btn pri" data-act="foodSave">${idx<0?"Hinzufügen":"Speichern"}</button>
     <div class="fe-save2"><button class="m-btn" data-act="favToggle">${isFav(it)?"★ Favorit":"☆ Favorit"}</button><button class="m-btn" data-act="kanSave">${kanList().some(x=>(x.name||"").toLowerCase()===(it.name||"").toLowerCase())?"✓ Kantine":"🍽 Kantine"}</button></div>
@@ -5166,6 +5169,13 @@ function foodSave(){
   const g=id=>{ const el=$("fe_"+id); return el? el.value : ""; };
   const it={...e.it, name:g("name").trim()||"Mahlzeit", kcal:num(g("kcal"))||0, p:num(g("p"))||0, c:num(g("c"))||0, f:num(g("f"))||0, t:e.it.t||Date.now()};
   if(!it.p100 && it.base){ const x=it.amt||1; if(Math.abs(it.kcal-Math.round(it.base.kcal*x))>1){ it.base={kcal:it.kcal,p:it.p,c:it.c,f:it.f}; it.amt=1; } }
+  // Barcode-Produkt von Hand korrigiert → korrigierte Werte je 100 g für diesen Barcode merken (Open Food Facts ist oft veraltet)
+  let eanNote=false;
+  if(e.it.ean && it.p100 && it.grams>0){ const G=it.grams, P=it.p100;
+    if(Math.abs(it.kcal-Math.round(P.kcal*G/100))>1 || ["p","c","f"].some(m=>Math.abs((it[m]||0)-Math.round((P[m]||0)*G/100))>=1)){
+      const np={kcal:Math.round(it.kcal*1000/G)/10, p:Math.round(it.p*1000/G)/10, c:Math.round(it.c*1000/G)/10, f:Math.round(it.f*1000/G)/10};
+      it.p100=np; delete it.base;
+      const n=NU(); n.eanFix=n.eanFix||{}; n.eanFix[e.it.ean]={name:it.name, p100:np, ...(it.pack?{pack:it.pack}:{}), t:Date.now()}; saveNutri(); eanNote=true; } }
   if(it.p100 && it.grams){ const exp=Math.round(it.p100.kcal*it.grams/100); if(Math.abs(it.kcal-exp)>1){ delete it.p100; it.base={kcal:it.kcal,p:it.p,c:it.c,f:it.f}; it.amt=1; } }
   // Foto-Schätzung von Hand korrigiert → automatisch als Referenz für künftige Foto-Schätzungen merken
   let refNote=false;
@@ -5178,7 +5188,7 @@ function foodSave(){
   if((it.sides||[]).length){ it.main={kcal:it.kcal,p:it.p,c:it.c,f:it.f}; const t=sumSides(it.sides); ["kcal","p","c","f"].forEach(k=>it[k]=Math.round(it.main[k]+t[k])); } else { delete it.sides; delete it.main; }
   if(e.idx<0) d[e.meal].push(it); else d[e.meal][e.idx]=it;
   if(e.it.sid) it.sid=e.it.sid;
-  saveFoodDay(k); UI.foodEdit=null; closeModal(); keepScrollHome(renderHome); toast(it.name+" gespeichert"+(refNote?" · Korrektur für Foto-Schätzungen gemerkt":"")); if(UI.mealOpen===e.meal) mealOpen(e.meal);
+  saveFoodDay(k); UI.foodEdit=null; closeModal(); keepScrollHome(renderHome); toast(it.name+" gespeichert"+(refNote?" · Korrektur für Foto-Schätzungen gemerkt":"")+(eanNote?" · Werte für diesen Barcode gemerkt":"")); if(UI.mealOpen===e.meal) mealOpen(e.meal);
 }
 function foodDel(){ const e=UI.foodEdit; if(!e) return; const k=UI.foodDay||todayKey(); foodDay(k)[e.meal].splice(e.idx,1); saveFoodDay(k); UI.foodEdit=null; closeModal(); keepScrollHome(renderHome); if(UI.mealOpen===e.meal) mealOpen(e.meal); }
 /* ---------- Bundeslebensmittelschlüssel (BLS 4.0) ----------

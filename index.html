@@ -1208,6 +1208,9 @@ body.kp-open .modal-box{max-height:calc(100dvh - var(--kp-h,250px) - 24px - var(
 body.kp-open .home{padding-bottom:calc(var(--safe-b) + 320px)}
 body.kp-open .dock{display:none!important}
 .toast.pr{background:var(--accent);color:#fff;white-space:normal;text-align:center;border-radius:18px;font-size:15px;line-height:1.35;padding:12px 18px;width:max-content;max-width:calc(100% - 32px)}
+/* Bestwert-Hinweis unten statt oben: iOS übernimmt sonst die Farbe eines breiten Elements oben dauerhaft in die Statusleiste */
+.toast.pr{top:auto;bottom:calc(var(--safe-b) + 84px);transform:translate(-50%,calc(100% + var(--safe-b) + 100px))}
+.toast.pr.show{transform:translate(-50%,0)}
 .prchip{display:inline-block;vertical-align:middle;margin-left:6px;font-size:13px;font-weight:700;font-stretch:100%;background:var(--warm-soft);color:var(--warm);padding:3px 8px;border-radius:999px}
 .pr-line{font-size:13px;font-weight:650;color:var(--warm);margin-top:8px}
 .pr-list{display:grid;gap:6px;margin:4px 0 14px}.pr-list div{background:var(--warm-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:14px}.pr-list b{color:var(--warm)}

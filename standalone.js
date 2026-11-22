@@ -539,7 +539,48 @@
     }
     throw E("not_granted");
   }
-  var PH = { list: null, urls: {}, notes: null, busy: false, sel: null };
+  var PH = { list: null, urls: {}, notes: null, busy: false, sel: null, open: false };
+  /* ---------- PIN-Sperre: Fotos standardmäßig ausgeblendet, Anzeigen nur nach PIN (Sichtschutz, gilt bis die App in den Hintergrund geht) ---------- */
+  async function pinHash(pin){ var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("gym-arc-pin:" + (uidOf() || "") + ":" + pin));
+    return Array.from(new Uint8Array(d)).map(function(x){ return x.toString(16).padStart(2, "0"); }).join(""); }
+  document.addEventListener("visibilitychange", function(){ if(document.hidden && PH.open){ PH.open = false; try{ if(document.querySelector("#modal.open .gph-two, #modal.open [data-gph=del]")) closeModal(); }catch(_){} phRefresh(); } });
+  function pinField(id, ph){ return '<input type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" id="' + id + '" placeholder="' + ph + '" style="width:100%;box-sizing:border-box;border:0;border-radius:14px;background:var(--tile);color:var(--ink);padding:14px;font:inherit;font-size:22px;letter-spacing:.3em;text-align:center;margin:0 0 10px;outline:none">'; }
+  function pinFocus(id){ setTimeout(function(){ try{ document.getElementById(id).focus(); }catch(_){} }, 80); }
+  async function pinDialog(){
+    var n = await phNotes();
+    if(!n.pin){
+      modal('<h3>PIN für Fotos festlegen</h3><p>Deine Fortschrittsfotos sind ausgeblendet und werden nur nach Eingabe dieser PIN angezeigt (4–8 Ziffern).</p>' + pinField("gpinA", "Neue PIN") + pinField("gpinB", "PIN wiederholen") +
+        '<p class="nu-hint warn" id="gpinMsg" style="display:none"></p><button class="m-btn pri" data-gph="pinset">PIN speichern & Fotos zeigen</button>');
+      pinFocus("gpinA"); return; }
+    modal('<h3>Fotos anzeigen</h3><p>PIN eingeben</p>' + pinField("gpinA", "PIN") + '<p class="nu-hint warn" id="gpinMsg" style="display:none"></p>' +
+      '<button class="m-btn pri" data-gph="pinok">Anzeigen</button><button class="link sm" style="display:block;margin:10px auto 0" data-gph="pinforgot">PIN vergessen?</button>');
+    pinFocus("gpinA");
+  }
+  function pinMsg(t){ var m = document.getElementById("gpinMsg"); if(m){ m.textContent = t; m.style.display = ""; } }
+  async function pinSet(){
+    var a = (document.getElementById("gpinA") || {}).value || "", b = (document.getElementById("gpinB") || {}).value || "";
+    if(!/^\d{4,8}$/.test(a)) return pinMsg("Bitte 4–8 Ziffern."); if(a !== b) return pinMsg("Die PINs stimmen nicht überein.");
+    var n = await phNotes(); n.pin = { h: await pinHash(a), t: Date.now() };
+    try{ await phSaveNotes(); }catch(e){ return pinMsg("Nicht gespeichert – keine Verbindung?"); }
+    PH.open = true; closeModal(); toast2("PIN gespeichert"); phRefresh();
+  }
+  async function pinOk(){
+    var a = (document.getElementById("gpinA") || {}).value || ""; var n = await phNotes();
+    if(n.pin && await pinHash(a) === n.pin.h){ PH.open = true; closeModal(); phRefresh(); }
+    else { pinMsg("Falsche PIN."); var el = document.getElementById("gpinA"); if(el){ el.value = ""; el.focus(); } }
+  }
+  function pinForgot(){
+    modal('<h3>PIN zurücksetzen</h3><p>Gib das Passwort deines Gym-Arc-Kontos ein, danach legst du eine neue PIN fest.</p>' +
+      '<input type="password" id="gpinPw" autocomplete="current-password" placeholder="Passwort" style="width:100%;box-sizing:border-box;border:0;border-radius:14px;background:var(--tile);color:var(--ink);padding:14px;font:inherit;font-size:17px;margin:0 0 10px;outline:none">' +
+      '<p class="nu-hint warn" id="gpinMsg" style="display:none"></p><button class="m-btn pri" data-gph="pinreset">Weiter</button>');
+    pinFocus("gpinPw");
+  }
+  async function pinReset(){
+    var pw = (document.getElementById("gpinPw") || {}).value || ""; if(!pw) return;
+    try{ var d = await authCall("token?grant_type=password", { email: sess.email, password: pw }); keep(d, sess.email); }
+    catch(e){ return pinMsg("Passwort falsch."); }
+    var n = await phNotes(); delete n.pin; pinDialog();
+  }
   async function phList(force){
     if(PH.list && !force) return PH.list;
     var uid = uidOf(); if(!uid) return [];
@@ -567,14 +608,45 @@
   async function phFill(){ // Vorschaubilder nachladen
     var row = document.getElementById("gphRow"); if(!row) return;
     var L; try{ L = await phList(); }catch(e){ row.innerHTML = '<p class="pc-sub" style="margin:0">Fotos konnten nicht geladen werden.</p>'; return; }
-    if(!L.length){ row.innerHTML = '<p class="pc-sub" style="margin:0">Noch keine Fotos. Am besten alle 2–3 Wochen, morgens, gleiches Licht, gleiche Pose.</p>'; return; }
-    row.innerHTML = L.slice(0, 30).map(function(p){ return '<button class="gph-th" data-gph="view" data-p="' + esc2(p.path) + '"><img alt="" data-src="' + esc2(p.path) + '"><span>' + deDate(p.day) + '</span></button>'; }).join("");
+    if(!L.length){ row.innerHTML = '<p class="pc-sub" style="margin:0">Noch keine Fotos. Am besten alle 2–3 Wochen, morgens, gleiches Licht, gleiche Pose. Zu jedem Foto schätzt Claude den Körperfettanteil.</p>'; return; }
+    var nt0 = await phNotes(), KF = nt0.kfa || {};
+    var lastK = L.map(function(p){ return { p: p, k: KF[p.name] }; }).find(function(x){ return x.k && x.k.kfa; });
+    var kLine = lastK ? '<p class="pc-sub" style="margin:10px 0 0">Körperfett (KI-Schätzung, ' + deDate(lastK.p.day) + '): <b>' + kfaTxt(lastK.k) + '</b>' + (lastK.k.von && lastK.k.bis ? ' · Spanne ' + lastK.k.von + '–' + lastK.k.bis + ' %' : '') + '</p>' : '';
+    if(!PH.open){
+      row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:var(--tile);border-radius:14px;padding:12px 14px">' +
+        '<span style="color:var(--muted);font-size:14px">🔒 ' + L.length + (L.length === 1 ? ' Foto' : ' Fotos') + ' ausgeblendet</span><button class="pill-btn" data-gph="unlock">Anzeigen</button></div>';
+      var ok0 = document.getElementById("gphK"); if(ok0) ok0.remove(); if(kLine) row.insertAdjacentHTML("afterend", '<div id="gphK">' + kLine + '</div>');
+      var cmp0 = document.getElementById("gphCmp"); if(cmp0) cmp0.style.display = "none"; var nt1 = document.getElementById("gphNote"); if(nt1) nt1.innerHTML = ""; return;
+    }
+    row.innerHTML = L.slice(0, 30).map(function(p){ var k = KF[p.name]; return '<button class="gph-th" data-gph="view" data-p="' + esc2(p.path) + '"><img alt="" data-src="' + esc2(p.path) + '"><span>' + deDate(p.day) + (k && k.kfa ? '<br>' + kfaTxt(k) + ' KFA' : '') + '</span></button>'; }).join("");
+    var ok1 = document.getElementById("gphK"); if(ok1) ok1.remove(); if(kLine) row.insertAdjacentHTML("afterend", '<div id="gphK">' + kLine + '</div>');
     var cmp = document.getElementById("gphCmp"); if(cmp) cmp.style.display = L.length >= 2 ? "" : "none";
     L.slice(0, 30).forEach(function(p){ phUrl(p).then(function(u){ var im = row.querySelector('img[data-src="' + p.path + '"]'); if(im) im.src = u; }).catch(function(){}); });
     var n = await phNotes(); var last = L[0] && n.notes[L[0].name];
     var nt = document.getElementById("gphNote"); if(nt) nt.innerHTML = last ? "<b>Letzter Vergleich (" + deDate(L[0].day) + " vs. " + deDate(last.vs) + "):</b> " + esc2(last.kurz || last.text) : "";
   }
-  async function phUpload(file, quiet){
+  function kgOn(day){ try{ var x = (S.body || []).filter(function(e){ return e.d <= day; }).sort(function(p, q){ return p.d < q.d ? 1 : -1; })[0]; return x ? x.kg : null; }catch(_){ return null; } }
+  /* Zu jedem neuen Foto: Körperfett per Claude schätzen */
+  async function phKfa(name, day, blob){
+    var info = ""; try{ var nu = NU(); info = (nu.sex === "w" ? "Frau" : "Mann") + (nu.height ? ", " + nu.height + " cm" : "") + (nu.age ? ", " + nu.age + " Jahre" : ""); }catch(_){}
+    var kg = kgOn(day);
+    try{
+      toast2("Körperfett wird geschätzt …");
+      var r = await SAMPLE.json('Fortschrittsfoto einer Person (' + info + (kg ? ", " + kg + " kg" : "") + ', Krafttraining). Schätze den Körperfettanteil visuell anhand sichtbarer Definition (Bauch, Taille, Schultern, Arme, Venen). ' +
+        'Licht, Pose und Pump können täuschen – gib eine realistische Spanne. Wenn auf dem Foto kein Oberkörper erkennbar ist, setze "auswertbar" auf false.\n' +
+        'Antworte NUR mit JSON: {"kfa":Zahl,"von":Zahl,"bis":Zahl,"kurz":"ein Satz, woran du es festmachst","auswertbar":true/false}', { images: [blob], modelTier: "default" });
+      var k = +r.kfa; var n = await phNotes(); n.kfa = n.kfa || {};
+      if(r.auswertbar === false || !(k > 2 && k < 60)){ n.kfa[name] = { none: true, t: Date.now() }; try{ await phSaveNotes(); }catch(_){} toast2("Körperfett auf diesem Foto nicht schätzbar"); phRefresh(); return; }
+      k = Math.round(k * 10) / 10;
+      n.kfa[name] = { kfa: k, von: +r.von || null, bis: +r.bis || null, kurz: String(r.kurz || "").slice(0, 200), t: Date.now() };
+      try{ await phSaveNotes(); }catch(_){}
+      // neuestes Foto → Körperzusammensetzung aktualisieren
+      var L = await phList(); if(L[0] && L[0].name === name){ try{ var nn = NU(); nn.kfa = k; nn.kfaSrc = "foto"; nn.kfaRange = (+r.von && +r.bis) ? [+r.von, +r.bis] : null; nn.kfaDate = new Date(day + "T12:00:00").getTime(); saveNutri(); }catch(_){} }
+      toast2("Körperfett ca. " + String(k).replace(".", ",") + " % (KI-Schätzung)"); phRefresh();
+    }catch(e){ toast2("Körperfett-Schätzung fehlgeschlagen"); }
+  }
+  function kfaTxt(x){ return x && x.kfa ? "~" + String(x.kfa).replace(".", ",") + " %" : ""; }
+  async function phUpload(file, quiet, known){
     if(!file || PH.busy) return; PH.busy = true; var ok = false;
     try{
       toast2("Foto wird gespeichert …");
@@ -582,24 +654,31 @@
       var c = document.createElement("canvas"); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc); c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
       var blob = await new Promise(function(res){ c.toBlob(function(x){ res(x); }, "image/jpeg", .85); });
       var uid = uidOf(); if(!uid) throw E("not_granted", "Nicht angemeldet");
-      await stor("POST", "object/photos/" + uid + "/" + today() + "_" + Date.now() + ".jpg", blob, "image/jpeg");
+      var day = today(), name = day + "_" + Date.now() + ".jpg";
+      await stor("POST", "object/photos/" + uid + "/" + name, blob, "image/jpeg");
       PH.list = null; ok = true; if(!quiet) toast2("Foto gespeichert"); phRefresh();
     }catch(e){ toast2("Foto nicht gespeichert: " + (e.message || e.code)); }
     finally{ PH.busy = false; }
-    if(ok && !quiet){ try{ var L = await phList(); if(L.length >= 2) phCompareDialog(); }catch(_){} }
+    if(ok && known && known.kfa){ try{ var NK = await phNotes(); NK.kfa = NK.kfa || {}; NK.kfa[name] = { kfa: Math.round(+known.kfa * 10) / 10, von: +known.von || null, bis: +known.bis || null, kurz: String(known.kurz || "").slice(0, 200), t: Date.now() }; await phSaveNotes(); phRefresh(); }catch(_){} }
+    else if(ok){ await phKfa(name, day, blob); }
+    if(ok && !quiet && PH.open){ try{ var L = await phList(); if(L.length >= 2) phCompareDialog(); }catch(_){} }
   }
   async function phView(path){
+    if(!PH.open) return pinDialog();
     var L = await phList(); var p = L.find(function(x){ return x.path === path; }); if(!p) return;
-    var u = await phUrl(p); var n = (await phNotes()).notes[p.name];
+    var u = await phUrl(p); var NT = await phNotes(), n = NT.notes[p.name], k = (NT.kfa || {})[p.name];
     modal('<h3>' + deDate(p.day) + '</h3><img src="' + u + '" alt="Fortschrittsfoto" style="width:100%;border-radius:16px;display:block;margin-bottom:12px">' +
+      (k && k.kfa ? '<p><b>Körperfett ca. ' + String(k.kfa).replace(".", ",") + ' %</b>' + (k.von && k.bis ? ' (Spanne ' + k.von + '–' + k.bis + ' %)' : '') + (k.kurz ? ' – ' + esc2(k.kurz) : '') + '</p>' : k && k.none ? '<p class="nu-hint">Körperfett auf diesem Foto nicht schätzbar.</p>' : '') +
       (n ? '<p><b>Vergleich mit ' + deDate(n.vs) + ':</b> ' + esc2(n.text) + '</p>' : '') +
       '<button class="m-btn red" data-gph="del" data-p="' + esc2(p.path) + '">Foto löschen</button>');
   }
   async function phDelete(path){
-    try{ await stor("DELETE", "object/photos", JSON.stringify({ prefixes: [path] }), "application/json"); PH.list = null; try{ closeModal(); }catch(_){} toast2("Foto gelöscht"); phRefresh(); }
+    try{ await stor("DELETE", "object/photos", JSON.stringify({ prefixes: [path] }), "application/json"); PH.list = null;
+      try{ var nm = path.split("/").pop(), NT = await phNotes(); if(NT.kfa && NT.kfa[nm]){ delete NT.kfa[nm]; await phSaveNotes(); } }catch(_){} try{ closeModal(); }catch(_){} toast2("Foto gelöscht"); phRefresh(); }
     catch(e){ toast2("Löschen fehlgeschlagen: " + (e.message || e.code)); }
   }
   async function phCompareDialog(){
+    if(!PH.open) return pinDialog();
     var L = await phList(); if(L.length < 2) return;
     var a = L[0], older = L.slice(1);
     // Vorschlag: das Foto, das am nächsten an 3 Wochen vorher liegt
@@ -643,8 +722,16 @@
     var k = b.getAttribute("data-gph"); if(k === "add") return;   // Datei-Auswahl läuft über das Label
     ev.preventDefault(); ev.stopPropagation();
     var p = b.getAttribute("data-p");
-    if(k === "view") phView(p); else if(k === "del") phDelete(p); else if(k === "cmp") phCompareDialog(); else if(k === "pick") phPick(p); else if(k === "run") phRun();
+    if(k === "unlock") pinDialog(); else if(k === "lock"){ PH.open = false; phRefresh(); } else if(k === "pinset") pinSet(); else if(k === "pinok") pinOk(); else if(k === "pinforgot") pinForgot(); else if(k === "pinreset") pinReset();
+    else if(k === "view") phView(p); else if(k === "del") phDelete(p); else if(k === "cmp") phCompareDialog(); else if(k === "pick") phPick(p); else if(k === "run") phRun();
   }, true);
+  // Eigene Zahlentastatur: PIN prüft sich beim Tippen selbst (kein extra Tippen auf „Anzeigen“ nötig)
+  document.addEventListener("input", function(ev){ var t = ev.target; if(!t || (t.id !== "gpinA" && t.id !== "gpinB")) return;
+    var isSet = !!document.querySelector('[data-gph="pinset"]'), A = document.getElementById("gpinA"), B = document.getElementById("gpinB");
+    if(isSet){ if(t.id === "gpinB" && B.value.length >= 4 && B.value.length === A.value.length) pinSet(); return; }
+    if(A.value.length >= 4){ var v = A.value; phNotes().then(function(n){ return n.pin ? pinHash(v).then(function(h){ if(h === n.pin.h && A.value === v){ PH.open = true; closeModal(); phRefresh(); } }) : null; }); } });
+  document.addEventListener("keydown", function(ev){ if(ev.key !== "Enter" || !ev.target || !/^gpin/.test(ev.target.id || "")) return; ev.preventDefault();
+    var id = ev.target.id; if(id === "gpinPw") pinReset(); else if(document.querySelector('[data-gph="pinset"]')){ if(id === "gpinA") document.getElementById("gpinB").focus(); else pinSet(); } else pinOk(); });
   document.addEventListener("change", function(ev){ if(ev.target && ev.target.id === "gphIn"){ var f = ev.target.files && ev.target.files[0]; ev.target.value = ""; phUpload(f); } });
   /* Tippen auf eine Mitteilung: direkt an die passende Stelle (Satzpause → aktiver Satz, Wiegen → Gewicht, Eiweiß → Tracking) */
   function gaOpen(kind){
@@ -670,7 +757,7 @@
   window.gymArcPhotos = { upload: phUpload, html: function(){
     if(!sess) return "";
     setTimeout(phFill, 0);
-    return '<div class="pcard gph"><div class="pc-h"><h3>Fortschrittsfotos</h3><label class="pill-btn" data-gph="add">+ Foto<input type="file" id="gphIn" accept="image/*" style="display:none"></label></div>' +
+    return '<div class="pcard gph"><div class="pc-h"><h3>Fortschrittsfotos</h3><span style="display:flex;gap:8px">' + (PH.open ? '<button class="pill-btn" data-gph="lock" aria-label="Fotos sperren">🔒</button>' : '') + '<label class="pill-btn" data-gph="add">+ Foto<input type="file" id="gphIn" accept="image/*" style="display:none"></label></span></div>' +
       '<div class="gph-row" id="gphRow"><p class="pc-sub" style="margin:0">Fotos werden geladen …</p></div>' +
       '<p class="pc-sub" id="gphNote" style="margin:10px 0 0"></p>' +
       '<button class="m-btn" id="gphCmp" data-gph="cmp" style="display:none;margin-top:12px">Mit früherem Foto vergleichen</button></div>';

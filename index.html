@@ -3703,7 +3703,7 @@ async function nuPhotoAnalyze(file){
     if(!res || res.kfa==null || !isFinite(+res.kfa)){ modal(`<h3>Keine Schätzung möglich</h3><p>${esc((res&&res.begruendung)||"Auf dem Foto ist kein Oberkörper gut erkennbar.")} Am besten: Oberkörper frei, gutes Licht, von vorn.</p>`); return; }
     n.kfa = Math.round(+res.kfa*10)/10; n.kfaSrc="foto"; n.kfaRange = (isFinite(+res.low)&&isFinite(+res.high))? [Math.round(+res.low), Math.round(+res.high)] : null; n.kfaDate=Date.now();
     saveNutri(); renderHome();
-    try{ if(window.gymArcPhotos && gymArcPhotos.upload) gymArcPhotos.upload(file, true); }catch(_){}
+    try{ if(window.gymArcPhotos && gymArcPhotos.upload) gymArcPhotos.upload(file, true, {kfa:n.kfa, von:n.kfaRange?n.kfaRange[0]:null, bis:n.kfaRange?n.kfaRange[1]:null, kurz:res.begruendung||""}); }catch(_){}
     modal(`<h3>Etwa ${fmtNum(n.kfa)} % Körperfett</h3><p>${n.kfaRange?`Spanne ${n.kfaRange[0]}–${n.kfaRange[1]} %. `:""}${esc(res.begruendung||"")}</p><p>Eine Schätzung per Foto ist ungefähr ± 3–5 % genau. Für den Verlauf zählt vor allem: gleiches Licht, gleiche Pose, gleiche Tageszeit.</p>`);
   }catch(err){
     modal(`<h3>Analyse fehlgeschlagen</h3><p>${err && err.code==="not_granted" ? "Die Analyse wurde nicht erlaubt." : err && err.code==="rate_limited" ? "Gerade zu viele Anfragen – bitte später nochmal." : "Bitte später erneut versuchen oder den Wert selbst eintragen."}</p>`);

@@ -539,7 +539,8 @@
     }
     throw E("not_granted");
   }
-  var PH = { list: null, urls: {}, notes: null, busy: false, sel: null, open: false };
+  var PH = { list: null, urls: {}, notes: null, busy: false, sel: null, open: false, kfaRun: false };
+  var LOCK_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
   /* ---------- PIN-Sperre: Fotos standardmäßig ausgeblendet, Anzeigen nur nach PIN (Sichtschutz, gilt bis die App in den Hintergrund geht) ---------- */
   async function pinHash(pin){ var d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("gym-arc-pin:" + (uidOf() || "") + ":" + pin));
     return Array.from(new Uint8Array(d)).map(function(x){ return x.toString(16).padStart(2, "0"); }).join(""); }
@@ -611,15 +612,18 @@
     if(!L.length){ row.innerHTML = '<p class="pc-sub" style="margin:0">Noch keine Fotos. Am besten alle 2–3 Wochen, morgens, gleiches Licht, gleiche Pose. Zu jedem Foto schätzt Claude den Körperfettanteil.</p>'; return; }
     var nt0 = await phNotes(), KF = nt0.kfa || {};
     var lastK = L.map(function(p){ return { p: p, k: KF[p.name] }; }).find(function(x){ return x.k && x.k.kfa; });
-    var kLine = lastK ? '<p class="pc-sub" style="margin:10px 0 0">Körperfett (KI-Schätzung, ' + deDate(lastK.p.day) + '): <b>' + kfaTxt(lastK.k) + '</b>' + (lastK.k.von && lastK.k.bis ? ' · Spanne ' + lastK.k.von + '–' + lastK.k.bis + ' %' : '') + '</p>' : '';
+    var kLine = lastK ? '<p class="pc-sub gph-k">Körperfett (KI-Schätzung, ' + deDate(lastK.p.day) + '): <b>' + kfaTxt(lastK.k) + '</b>' + (lastK.k.von && lastK.k.bis ? ' · Spanne ' + lastK.k.von + '–' + lastK.k.bis + ' %' : '') + '</p>' : '';
+    // Fotos ohne Körperfett-Schätzung (z. B. vor dem Update hochgeladen) einmal nachträglich schätzen
+    if(!PH.kfaRun){ PH.tried = PH.tried || {}; var miss = L.filter(function(p){ return !KF[p.name] && !PH.tried[p.name]; }).slice(0, 5); miss.forEach(function(p){ PH.tried[p.name] = 1; });
+      if(miss.length){ PH.kfaRun = true; (async function(){ for(var i = 0; i < miss.length; i++){ try{ await phKfa(miss[i].name, miss[i].day, await phBlob(miss[i])); }catch(_){} } PH.kfaRun = false; })(); } }
     if(!PH.open){
-      row.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;background:var(--tile);border-radius:14px;padding:12px 14px">' +
-        '<span style="color:var(--muted);font-size:14px">🔒 ' + L.length + (L.length === 1 ? ' Foto' : ' Fotos') + ' ausgeblendet</span><button class="pill-btn" data-gph="unlock">Anzeigen</button></div>';
+      row.innerHTML = '<button class="gph-lock" data-gph="unlock">' + LOCK_IC + '<span>' + L.length + (L.length === 1 ? ' Foto' : ' Fotos') + ' ausgeblendet</span><em>Anzeigen</em></button>';
       var ok0 = document.getElementById("gphK"); if(ok0) ok0.remove(); if(kLine) row.insertAdjacentHTML("afterend", '<div id="gphK">' + kLine + '</div>');
       var cmp0 = document.getElementById("gphCmp"); if(cmp0) cmp0.style.display = "none"; var nt1 = document.getElementById("gphNote"); if(nt1) nt1.innerHTML = ""; return;
     }
-    row.innerHTML = L.slice(0, 30).map(function(p){ var k = KF[p.name]; return '<button class="gph-th" data-gph="view" data-p="' + esc2(p.path) + '"><img alt="" data-src="' + esc2(p.path) + '"><span>' + deDate(p.day) + (k && k.kfa ? '<br>' + kfaTxt(k) + ' KFA' : '') + '</span></button>'; }).join("");
-    var ok1 = document.getElementById("gphK"); if(ok1) ok1.remove(); if(kLine) row.insertAdjacentHTML("afterend", '<div id="gphK">' + kLine + '</div>');
+    row.innerHTML = L.slice(0, 30).map(function(p){ var k = KF[p.name]; return '<button class="gph-th" data-gph="view" data-p="' + esc2(p.path) + '"><img alt="" data-src="' + esc2(p.path) + '"><span>' + deDate(p.day) + (k && k.kfa ? '<br><b>' + kfaTxt(k) + '</b> KFA' : '') + '</span></button>'; }).join("");
+    var ok1 = document.getElementById("gphK"); if(ok1) ok1.remove();
+    row.insertAdjacentHTML("afterend", '<div id="gphK">' + kLine + '<button class="link sm" data-gph="lock" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;color:var(--muted)"><span style="width:15px;height:15px;display:inline-flex">' + LOCK_IC + '</span>Fotos ausblenden</button></div>');
     var cmp = document.getElementById("gphCmp"); if(cmp) cmp.style.display = L.length >= 2 ? "" : "none";
     L.slice(0, 30).forEach(function(p){ phUrl(p).then(function(u){ var im = row.querySelector('img[data-src="' + p.path + '"]'); if(im) im.src = u; }).catch(function(){}); });
     var n = await phNotes(); var last = L[0] && n.notes[L[0].name];
@@ -757,7 +761,7 @@
   window.gymArcPhotos = { upload: phUpload, html: function(){
     if(!sess) return "";
     setTimeout(phFill, 0);
-    return '<div class="pcard gph"><div class="pc-h"><h3>Fortschrittsfotos</h3><span style="display:flex;gap:8px">' + (PH.open ? '<button class="pill-btn" data-gph="lock" aria-label="Fotos sperren">🔒</button>' : '') + '<label class="pill-btn" data-gph="add">+ Foto<input type="file" id="gphIn" accept="image/*" style="display:none"></label></span></div>' +
+    return '<div class="pcard gph"><div class="pc-h"><h3>Fortschrittsfotos</h3><span>' + '<label class="pill-btn" data-gph="add">+ Foto<input type="file" id="gphIn" accept="image/*" style="display:none"></label></span></div>' +
       '<div class="gph-row" id="gphRow"><p class="pc-sub" style="margin:0">Fotos werden geladen …</p></div>' +
       '<p class="pc-sub" id="gphNote" style="margin:10px 0 0"></p>' +
       '<button class="m-btn" id="gphCmp" data-gph="cmp" style="display:none;margin-top:12px">Mit früherem Foto vergleichen</button></div>';

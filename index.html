@@ -2584,16 +2584,22 @@ async function getSample(){ try{ if(!(window.claude&&window.claude.use)) return 
 async function analyzeWithClaude(){
   const a = S.active; if(!a) return;
   const w = W(a.workoutId);
-  const data = w.exercises.map(e=>({
+  // Kosten sparen: Übungen, für die seit der letzten Claude-Analyse kein neues Training dazukam, nicht erneut schicken
+  // Übungen mit klarer Regel (oder geplanter Umstellung) braucht Claude nicht – dort gilt ohnehin die Regel
+  const fxOf = e => { const b=a.base[e.id]; return planLock(e) || (b && (b.src==="claude" || !b.unclear) ? b : null); };
+  const cachedList = w.exercises.map(e=>{ if(fxOf(e)) return {id:e.id, action:"hold", kg:null}; const f=exAiFresh(e); return f ? {id:e.id, action:f.action, kg:f.kg, reason:f.reason, kurz:f.short} : null; }).filter(Boolean);
+  const cachedIds = new Set(cachedList.map(x=>x.id));
+  const data = w.exercises.filter(e=>!cachedIds.has(e.id)).map(e=>({
     id:e.id, name:e.name, equipment:e.equip, targetReps:e.reps, targetRepsMax:e.repsMax||null, plannedSets:e.sets, weightStepKg:STEP(e),
-    sessions: lastNFor(e.id, 8).map(s=>({date:new Date(s.date).toISOString().slice(0,10), sets:s.sets.map(x=>({kg:x.kg, reps:x.reps})), ...(s.ord?{order:s.ord==="fresh"?"früher als geplant, Muskeln frischer":"später als geplant, Muskeln vorermüdet"}:{})})),
+    sessions: lastNFor(e.id, 5).map(s=>({date:new Date(s.date).toISOString().slice(0,10), sets:s.sets.map(x=>({kg:x.kg, reps:x.reps})), ...(s.ord?{order:s.ord==="fresh"?"früher als geplant, Muskeln frischer":"später als geplant, Muskeln vorermüdet"}:{})})),
     availableWeightsKg: stackOf(e) ? (()=>{ const l=lastNFor(e.id,1)[0]; const w=l?Math.max(...l.sets.map(s=>s.kg||0)):0; return stackOf(e).filter(x=>!w || (x>=w*0.75 && x<=w*1.25)); })() : null,
     ruleSuggestion: a.base[e.id], lockedKg: (planLock(e)||{}).kg ?? null, stagnationWeeks: (stagnation(e)||{}).weeks||0, stagnationStrategy: (()=>{ const c=(S.stagAi||{})[e.id]; return c && c.key===stagKey(e.id) && c.status==="done" ? c.item : null; })()
   }));
-  if(!data.some(d=>d.sessions.length)){ a.ai={status:"skip"}; persist(); return; }
+  const needAi = data.some(d=>d.sessions.length);
+  if(!needAi && !cachedList.length){ a.ai={status:"skip"}; persist(); return; }
   a.ai={status:"loading"}; persist(); refreshRecUI();
-  const sample = await getSample();
-  if(!sample){ a.ai={status:"off"}; persist(); refreshRecUI(); return; }
+  const sample = needAi ? await getSample() : null;
+  if(needAi && !sample){ a.ai={status:"off"}; persist(); refreshRecUI(); return; }
   const prompt = `Du bist ein evidenzbasierter Krafttrainings-Coach. Analysiere die bisherigen Trainingsdaten und gib für JEDE Übung eine Gewichtsempfehlung für das heutige Training "${w.name}".
 
 Grundlagen, an die du dich hältst:
@@ -2621,9 +2627,9 @@ ${JSON.stringify(data)}
 Antworte NUR mit JSON in diesem Format:
 {"items":[{"id":"<id>","action":"up"|"hold"|"down"|"new","kg":<Zahl oder null>,"kurz":"<Grund in max. 35 Zeichen, z. B. Ziel geschafft oder Bis Satz 1 und 2 je 10 Wdh>","reason":"<kurze Begründung auf Deutsch, max. 140 Zeichen, nenne die konkreten Werte>"}]}`;
   try{
-    const res = await sample.json(prompt, {modelTier:"default"});
+    const res = needAi ? await sample.json(prompt, {modelTier:"default"}) : {items:[]};
     const items = {};
-    (res && res.items || []).forEach(it=>{
+    [...cachedList, ...(res && res.items || [])].forEach(it=>{
       const e = w.exercises.find(x=>x.id===it.id); if(!e) return;
       if(!["up","hold","down","new"].includes(it.action)) return;
       let kg = (typeof it.kg==="number" && isFinite(it.kg)) ? it.kg : null;
@@ -2635,7 +2641,8 @@ Antworte NUR mit JSON in diesem Format:
       if(!fx && last){ S.recAi=S.recAi||{}; S.recAi[e.id]={key:String(last.date), status:"done", item:{...items[e.id]}}; }
     });
     if(!S.active || S.active.start!==a.start) return;
-    S.active.ai = Object.keys(items).length ? {status:"done", items} : {status:"error"};
+    const usedClaude = needAi || cachedList.some(x=>x.reason);
+    S.active.ai = Object.keys(items).length ? {status:usedClaude?"done":"rules", items} : {status:"error"};
     // Claude-Empfehlung in offene, nicht selbst geänderte Sätze übernehmen
     Object.entries(items).forEach(([id,it])=>{ const x=S.active.ex[id]; if(!x || !it || it.kg==null) return;
       x.sets.forEach(s=>{ if(!s.done && s.kgAuto!==false) { s.kg=it.kg; s.kgAuto=true; } });
@@ -4026,10 +4033,23 @@ function foodAddMenu(view){
     <button class="m-btn pri" data-act="faView" data-v="text">Mit Claude: Foto oder Beschreibung</button>
     <div class="fe-save2 fa-bc"><button class="m-btn" data-act="bcScan" data-to="food">${BC_IC}Barcode</button><button class="m-btn" data-act="foodManual">Selbst eintragen</button></div>`);
 }
+/* Schon einmal erfasst? Dann Werte übernehmen statt Claude zu fragen (spart Kosten) */
+const foodNorm = s => String(s||"").toLowerCase().normalize("NFC").replace(/[^a-zäöüß0-9%,.]+/g," ").trim();
+function findKnownFood(q){
+  const n=foodNorm(q); if(n.length<3) return null; let best=null;
+  Object.keys(S.food||{}).sort().forEach(k=>{ const d=S.food[k]; if(!d) return;
+    MEALS.forEach(([m])=>(d[m]||[]).forEach(it=>{ if(it && +it.kcal>0 && foodNorm(it.name)===n && !(it.sides||[]).length) best={it, day:k}; })); });
+  if(best) return best;
+  const f=(NU().favs||[]).find(x=>foodNorm(x.name)===n && +x.kcal>0); return f ? {it:f, day:null} : null;
+}
 async function foodTextSearch(){
   const q=($("fdQ")||{}).value||""; const meal=foodMeal;
   if(!q.trim()){ toast("Bitte eintippen, was du gegessen hast"); return; }
   const v=findVerified(q); if(v){ foodEditor(verifiedItem(v, qtyFromQuery(q,v)), meal, -1); return; }
+  const known=findKnownFood(q);
+  if(known){ const s=known.it, copy=JSON.parse(JSON.stringify(s)); ["t","sid","std","fav","id","daily"].forEach(k=>delete copy[k]);
+    const dt=known.day ? new Date(known.day+"T12:00:00").toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"}) : null;
+    foodEditor(copy, meal, -1, `Werte von deinem Eintrag ${dt?"vom "+dt:"aus den Favoriten"} übernommen – ohne Claude. Für eine andere Menge die Menge anpassen oder die Beschreibung mit Mengen eintippen.`); return; }
   let sample=null; try{ sample = window.claude && claude.use ? await claude.use("sample") : null; }catch(_){}
   if(!sample){ foodEditor({name:q.trim().slice(0,60), kcal:"", p:"", c:"", f:""}, meal, -1, "Die KI-Suche ist hier nicht verfügbar – trag die Werte bitte selbst ein."); return; }
   modal(`<h3>Nährwerte werden ermittelt …</h3><p>${esc(q)}</p>`);
@@ -5192,7 +5212,7 @@ function foodEditor(it, meal, idx, msg){
   UI.foodEdit={it, meal, idx};
   const f=(k,l,u)=>`<label class="nu-f"><span>${l}</span><div><input inputmode="decimal" id="fe_${k}" value="${it[k]??""}"><em>${u}</em></div></label>`;
   modal(`<h3>${idx<0?"Mahlzeit hinzufügen":"Mahlzeit bearbeiten"}</h3>
-    ${msg?`<p class="nu-hint warn">${esc(msg)}</p>`:""}
+    ${msg?`<p class="nu-hint ${/übernommen/.test(msg)?"":"warn"}">${esc(msg)}</p>`:""}
     ${it.verified?`<div class="fd-ok">✓ Geprüfte Herstellerangaben</div>`:""}
     ${it.parts && !it.comp?`<p>${esc(it.parts)}</p>`:""}
     <label class="nu-f" style="margin-bottom:10px"><span>Name</span><div><input id="fe_name" value="${esc(it.name||"")}" style="font-size:18px"></div></label>

@@ -1,7 +1,7 @@
 // Gym Arc – Server-Funktion "push" (Supabase Edge Function)
 // Schickt eine Mitteilung aufs iPhone, wenn die Satzpause vorbei ist – auch bei gesperrtem Bildschirm.
 // Keine eigenen Secrets nötig: Die Push-Schlüssel (VAPID) werden beim ersten Aufruf erzeugt und in der Datenbank gespeichert.
-// Aktionen: key | subscribe | unsubscribe | schedule | cancel | tick (vom Zeitplaner) | test | minute (vom Zeitplaner) | daily | bug
+// Aktionen: key | subscribe | unsubscribe | schedule | cancel | tick (vom Zeitplaner) | test | minute (vom Zeitplaner) | daily
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,7 +13,6 @@ const json = (o: unknown, status = 200) =>
 
 const BASE = Deno.env.get("SUPABASE_URL") || "";
 const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const OWNER = "b489f427-ee44-495c-bdb4-858ae3c9773f"; // bekommt die Fehlermeldungen
 
 // ---------- Datenbank (nur Server, Tabellen ohne Zugriff für die App) ----------
 async function db(path: string, init: RequestInit = {}) {
@@ -224,20 +223,6 @@ Deno.serve(async (req) => {
           ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(String(b.proteinAt || "")) ? { protein_time: String(b.proteinAt) } : {}) }),
       });
       return json({ ok: true });
-    }
-    if (action === "bug") { // Fehlermeldung aus der App: speichern + Mitteilung an den Entwickler
-      const since = new Date(Date.now() - 24 * 3600e3).toISOString();
-      const cnt = await db("bug_reports?user_id=eq." + user.id + "&created_at=gte." + encodeURIComponent(since) + "&select=id");
-      if (cnt && cnt.length >= 15) return json({ code: "rate", message: "Zu viele Meldungen heute" }, 429);
-      const rep = b.report && typeof b.report === "object" ? b.report : {};
-      const raw = JSON.stringify(rep);
-      if (raw.length > 120000) return json({ code: "invalid", message: "Zu groß" }, 400);
-      const summary = String(rep.summary || "").slice(0, 400);
-      const ins = await db("bug_reports", { method: "POST", headers: { Prefer: "return=representation" },
-        body: JSON.stringify({ user_id: user.id, email: user.email || null, summary, data: rep }) });
-      const who = String(user.email || "").split("@")[0] || "Jemand";
-      try { await deliver(OWNER, "🐞 Fehler gemeldet von " + who, summary.slice(0, 150)); } catch (_) { /* Meldung ist gespeichert */ }
-      return json({ ok: true, id: ins && ins[0] && ins[0].id });
     }
     if (action === "test") return json({ ok: true, sent: await deliver(user.id, "Pause vorbei", "So sieht die Mitteilung aus 💪") });
     return json({ code: "invalid", message: "Unbekannte Aktion" }, 400);

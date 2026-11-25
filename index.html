@@ -1089,6 +1089,9 @@ body.kp-open #histsheet .sheet-scroll{padding-bottom:340px}
 .fd-prev{display:flex;justify-content:center;margin:6px 0 10px}.fd-prev img{width:120px;height:120px;border-radius:16px;object-fit:cover}
 body.ob-mode .tabbar{display:none}
 .ob .h-sub{line-height:1.45;margin-bottom:18px}
+.ob-skip{margin:6px 0 4px}
+.lib-new{margin:0 0 14px}
+.ne-top{display:flex;gap:10px;align-items:center}.ne-top .ex-thumb{flex-shrink:0}.ne-top input{flex:1;min-width:0}
 .w-empty{background:var(--surface);border-radius:var(--r-lg);padding:18px;margin-bottom:12px}.w-empty b{display:block;font-size:17px;margin-bottom:4px}.w-empty span{color:var(--muted);font-size:14px;line-height:1.45}
 .wb-ini{font-weight:800;font-size:22px;color:#fff;letter-spacing:-.02em}
 .ob-opt{display:block;width:100%;text-align:left;background:var(--surface);border-radius:18px;padding:16px 18px;margin-bottom:10px}
@@ -1835,7 +1838,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
   const doneToday = S.history.some(x=>new Date(x.start).toDateString()===now.toDateString());
   let nd = new Date(now); for(let k=1;k<=8;k++){ nd = new Date(now); nd.setDate(now.getDate()+k); if(PLAN.days.includes(nd.getDay()) && !coveredByMove(nd)) break; }
   const nextDayTxt = (()=>{ const diff=Math.round((new Date(nd.toDateString())-new Date(now.toDateString()))/864e5); return diff===1?"morgen":WEEKDAYS[nd.getDay()]; })();
-  const todayLine = !nextW ? (PLAN.workouts.length?"":"Noch kein Training angelegt.") : !PLAN.days.length ? `Lege unter <b>Zahnrad → Trainingstage</b> fest, an welchen Tagen du trainierst.` : doneToday ? `Heute erledigt. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`
+  const todayLine = !nextW ? (PLAN.workouts.length?"":"Noch kein Split angelegt.") : !PLAN.days.length ? `Lege unter <b>Zahnrad → Trainingstage</b> fest, an welchen Tagen du trainierst.` : doneToday ? `Heute erledigt. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`
     : todayIsT ? ""
     : movedToday ? `Heute frei – schon vorgezogen. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`
     : `Heute Ruhetag. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`;
@@ -1863,8 +1866,8 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
         <div class="w-last">${ld? "Zuletzt "+relDay(ld).replace(/^(Heute|Gestern)$/,m=>m.toLowerCase())+(S.history.find(x=>x.workoutId===w.id).score? ", "+S.history.find(x=>x.workoutId===w.id).score.score+" %":"") : "Noch nicht trainiert"}</div></div>
         <span class="chev">›</span></button>`;
     }).join("")}
-    ${!PLAN.workouts.length?`<div class="w-empty"><b>Noch keine Trainings</b><span>Lege dein erstes Training an, z. B. „Push“, „Oberkörper“ oder „Ganzkörper“, und füge dann die Übungen hinzu.</span></div>`:""}
-    ${S.mode!=="owner"?`<button class="ed-add" data-act="wNew">+ Training anlegen</button>`:""}
+    ${!PLAN.workouts.length?`<div class="w-empty"><b>Noch keine Splits</b><span>Lege für jeden Trainingstag deines Splits ein Training an, z. B. „Push“ und „Pull“ oder „Oberkörper“ und „Unterkörper“. Übungen fügst du direkt dort oder unter Übungen hinzu.</span></div>`:""}
+    ${S.mode!=="owner"?`<button class="ed-add" data-act="wNew">+ Split anlegen</button>`:""}
   </div>`;
   renderTabbar();
   renderResume();
@@ -3252,7 +3255,8 @@ function buildPlan(){
 /* Eigene Trainings anlegen, umbenennen, löschen (für alle Konten außer dem Besitzer-Plan) */
 function wEditModal(wid){
   const w=wid?(S.settings.workouts||[]).find(x=>x.id===wid):null; UI.wEdit=wid||null;
-  modal(`<h3>${w?"Training umbenennen":"Neues Training"}</h3>
+  modal(`<h3>${w?"Split umbenennen":"Split anlegen"}</h3>
+    ${w?"":`<p style="margin:-2px 0 12px">Ein Training deines Splits, z. B. „Push“. Für weitere Trainingstage legst du einfach weitere an.</p>`}
     <label class="nu-f" style="margin-bottom:12px"><span>Name</span><div><input id="wName" maxlength="24" value="${w?esc(w.name):""}" placeholder="z. B. Push, Oberkörper, Ganzkörper A" style="font-size:18px"></div></label>
     ${w?"":`<div class="fv-l">Vorschläge</div><div class="fv-row">${["Push","Pull","Beine","Oberkörper","Unterkörper","Ganzkörper A","Ganzkörper B"].filter(n=>!(S.settings.workouts||[]).some(x=>x.name===n)).map(n=>`<button class="fv-chip" data-act="wPick" data-n="${n}"><b>${n}</b></button>`).join("")}</div>`}
     <button class="m-btn pri" data-act="wSave">${w?"Speichern":"Anlegen & Übungen wählen"}</button>`);
@@ -3269,6 +3273,7 @@ function wSave(){
   try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
   buildPlan(); saveLocal(); saveSettingsRemote(); closeModal(); renderHome();
   if(UI.wEdit){ toast("Umbenannt"); if(UI.preview===id) renderPreview(); }
+  else if(UI.wAfterAdd){ const ex=UI.wAfterAdd; UI.wAfterAdd=null; libAdd(ex, id); openPreview(id); }
   else { openPreview(id); editStart(id); editAddModal(); }
   UI.wEdit=null;
 }
@@ -3318,13 +3323,9 @@ function editAddModal(){
   modal(`<h3>Übung hinzufügen</h3>
     <div class="vd-list">${opts.map(e=>`<button class="vd-row ed-pick" data-act="edAdd" data-id="${e.id}"><div style="text-align:left"><b>${esc(e.name)}</b><span>${esc(e.equip)} · ${esc(e.muscle||"")}</span></div><em style="font-size:22px;color:var(--accent)">+</em></button>`).join("")}</div>
     <div class="vd-sub">Eigene Übung</div>
-    <form class="ed-new" data-form="newEx">
-      <input id="neName" placeholder="Name, z. B. Kabel-Seitheben" maxlength="40">
-      <div class="ed-new-row"><select id="neEquip">${["Maschine","Kabelzug","Kurzhanteln","Langhantel","Körpergewicht"].map(x=>`<option>${x}</option>`).join("")}</select>
-      <select id="neMuscle">${MUSCLES.map(m=>`<option>${m}</option>`).join("")}</select></div>
-      <button type="submit" class="m-btn pri">Erstellen & hinzufügen</button>
-    </form>
+    ${newExForm("newEx")}
     <button class="m-btn" data-act="closeModal">Abbrechen</button>`);
+  setTimeout(()=>nePreview(false),60);
 }
 function renderEditPreview(w){
   return `
@@ -5419,7 +5420,9 @@ function renderOnboarding(){
   if(P) return renderSetupPreview(P);
   return `<div class="home ob">
     <div class="h-title">Gym Arc</div>
-    <div class="h-sub">Willkommen! Importiere zuerst deine bisherigen Trainings – daraus richtet die App deinen Plan, deine Gewichte und Empfehlungen ein.</div>
+    <div class="h-sub">Willkommen! Importiere deine bisherigen Trainings – daraus richtet die App Plan, Gewichte und Empfehlungen ein. Oder starte direkt und lege alles selbst an.</div>
+    <button class="m-btn pri ob-skip" data-act="obEmpty">Ohne Import fortsetzen</button>
+    <div class="fv-l" style="margin:18px 0 10px">Oder importieren</div>
     <input type="file" id="obFile" accept=".txt,.csv,.json,text/plain,application/json" style="display:none">
     <input type="file" id="obImgs" accept="image/*" multiple style="display:none">
     <button class="ob-opt" data-act="obFile"><b>Datei importieren</b><span>Textexport aus deiner Trainings-App (z. B. Alpha Progression) oder eine Gym-Arc-Sicherung</span></button>
@@ -5427,7 +5430,6 @@ function renderOnboarding(){
     <div class="ob-opt ob-text"><b>Text einfügen</b><span>Kopierte Notizen oder Tabellen</span>
       <textarea id="obText" placeholder="z. B.&#10;12.11. Push&#10;Bankdrücken 60kg 10/9/8&#10;…"></textarea>
       <button class="m-btn pri" data-act="obText">Text auswerten</button></div>
-    <button class="ob-opt" data-act="obEmpty"><b>Leer starten</b><span>Ohne Import beginnen – Trainings, Übungen und Ziele selbst anlegen</span></button>
     <div id="obStatus" class="ob-status"></div>
   </div>`;
 }
@@ -5515,30 +5517,89 @@ FIG.deadlift.thumbT = 0; FIG.swing.thumbT = 1;
   if(!MUSCLE_COLOR[muscle]) MUSCLE_COLOR[muscle] = ({"Waden":"#30b0c7","Unterarme":"#ff375f","Nacken":"#bf5af2","Adduktoren":"#30b0c7","Latissimus":"#bf5af2"})[muscle] || "#8e8e93";
 });
 ["Waden","Unterarme","Nacken","Adduktoren"].forEach(m=>{ if(!MUSCLES.includes(m)) MUSCLES.push(m); });
+/* Eigene Übungen: passendes Icon, Gerät und Muskel anhand des Namens (ähnlichste Übung aus der Bibliothek) */
+const NAME_HINTS = [[/klimmz|pull.?up|chin/, "pullup"],[/latzug|lat.?pull/, "lz"],[/kreuzheb|deadlift/, "deadlift"],[/rum[aä]n|rdl|gestreckt/, "rdl"],
+  [/kniebeug|squat/, "squat"],[/beinpresse|leg.?press/, "bp"],[/ausfall|lunge/, "lunge"],[/hip.?thrust|hüftstoß|hueftstoss/, "hipthrust"],
+  [/bankdr|bench/, "bench"],[/schulterdr|overhead|military|ohp/, "ohp"],[/seitheb|lateral/, "latraise"],[/frontheb|front.?raise/, "frontraise"],
+  [/face.?pull/, "facepull"],[/butterfly.?rev|reverse.?fly|reverse.?butterfly/, "bfr"],[/butterfly|fliegend|\bfly|pec.?deck/, "bfw"],[/crossover|cable.?fly/, "crossover"],
+  [/rudern|row/, "seatedrow"],[/shrug|nackenheb|schulterheb/, "shrug"],[/hammer/, "hc"],[/preacher|scott/, "pc"],[/konzentration/, "conc"],[/curl/, "curl"],
+  [/dips?\b/, "dip"],[/liegest|push.?up/, "pushup"],[/french|skull|stirn/, "skull"],[/kickback/, "kickback"],[/trizeps|triceps|pushdown|drücken am kabel/, "tdcable"],
+  [/beinstreck|leg.?ext/, "bs"],[/beinbeug|leg.?curl/, "legcurl"],[/wade|calf/, "calf"],[/abdukt/, "abduct"],[/addukt/, "adduct"],
+  [/crunch/, "crunch"],[/sit.?up/, "situp"],[/beinheb|leg.?raise/, "legraise"],[/plank|unterarmstütz/, "plank"],[/rollout|ab.?wheel/, "abwheel"],
+  [/hyperext|rückenstreck/, "hyp"],[/farmer/, "farmer"],[/kettlebell|swing/, "swing"],[/pullover/, "pullover"],[/handgelenk|wrist/, "wrist"]];
+const MUSCLE_FIG = {"Brust":"bench","Latissimus":"lz","Oberer Rücken":"seatedrow","Unterer Rücken":"hyp","Vordere Schulter":"ohp","Seitliche Schulter":"latraise","Hintere Schulter":"bfr",
+  "Bizeps":"curl","Trizeps":"tdcable","Unterarme":"wrist","Quadrizeps":"squat","Beinbeuger":"legcurl","Gesäß":"hipthrust","Waden":"calf","Bauch":"crunch","Nacken":"shrug","Adduktoren":"adduct"};
+const CAT_OF_MUSCLE = m => ({"Brust":"Brust","Latissimus":"Rücken","Oberer Rücken":"Rücken","Unterer Rücken":"Rücken","Nacken":"Rücken","Vordere Schulter":"Schultern","Seitliche Schulter":"Schultern","Hintere Schulter":"Schultern",
+  "Bizeps":"Arme","Trizeps":"Arme","Unterarme":"Arme","Bauch":"Bauch"})[m] || "Beine";
+function guessEx(name){
+  const n=String(name||"").toLowerCase().normalize("NFC"); if(n.trim().length<3) return null;
+  // 1) ähnlichster Bibliotheksname (gemeinsame Wortteile)
+  const STOP=/^(kurzhantel|kurzhanteln|langhantel|maschine|kabel|kabelzug|stange|sitzend|stehend|liegend|einarmig|beidarmig|einbeinig|eng|weit|mit|der|dem|an|auf|am|im|und)$/;
+  const words=s=>s.toLowerCase().split(/[^a-zäöüß0-9]+/).filter(w=>w.length>=4 && !STOP.test(w));
+  let best=null, bs=0;
+  LIB.forEach(x=>{ let s=0; words(x.name).forEach(w=>{ if(n.includes(w)) s+=w.length; else if(w.length>=6 && n.includes(w.slice(0,6))) s+=4; }); if(s>bs){ bs=s; best=x; } });
+  if(best && bs>=6) return {fig:best.fig, equip:best.equip, muscle:best.prim, like:best.name};
+  // 2) Stichwörter
+  for(const [re,fig] of NAME_HINTS){ if(re.test(n)){ const x=LIB.find(l=>l.fig===fig); return {fig, equip:x?x.equip:null, muscle:x?x.prim:null, like:x?x.name:null}; } }
+  return null;
+}
+function equipOfName(n){ n=String(n||"").toLowerCase(); return /\bsz\b|sz-stange/.test(n)?"SZ-Stange":/kurzhantel|dumbbell|\bkh\b/.test(n)?"Kurzhanteln":/langhantel|barbell|\blh\b/.test(n)?"Langhantel":/kabel|cable|seilzug/.test(n)?"Kabelzug":/maschine|machine|gerät/.test(n)?"Maschine":/kettlebell/.test(n)?"Kettlebells":null; }
+function customToLib(c){ return {id:c.id, name:c.name, equip:c.equip||"", prim:c.muscle||"", sec:[], fig:c.fig||MUSCLE_FIG[c.muscle]||"bench", cat:CAT_OF_MUSCLE(c.muscle), custom:true}; }
+function libAll(){ const C=Object.values(S.settings.customEx||{}).map(customToLib); C.forEach(c=>{ if(!FIG[c.id]) FIG_ALIAS[c.id]=c.fig; if(!MUSCLE_COLOR[c.prim]) MUSCLE_COLOR[c.prim]="#8e8e93"; }); return [...C, ...LIB]; }
+function libFind(id){ return libAll().find(l=>l.id===id); }
+function newExForm(formId){
+  const EQ=["Maschine","Kabelzug","Kurzhanteln","Langhantel","SZ-Stange","Körpergewicht","Kettlebells"];
+  return `<form class="ed-new" data-form="${formId}">
+      <div class="ne-top"><div class="ex-thumb" id="nePrev"></div><input id="neName" placeholder="Name, z. B. Kabel-Seitheben" maxlength="40" autocomplete="off"></div>
+      <p class="nu-hint" id="neHint" style="margin:6px 0 8px">Icon, Gerät und Muskel werden anhand des Namens vorgeschlagen.</p>
+      <div class="ed-new-row"><select id="neEquip">${EQ.map(x=>`<option>${x}</option>`).join("")}</select>
+      <select id="neMuscle">${MUSCLES.map(m=>`<option>${m}</option>`).join("")}</select></div>
+      <button type="submit" class="m-btn pri">${formId==="newEx"?"Erstellen & hinzufügen":"Übung erstellen"}</button>
+    </form>`;
+}
+function neFig(){ const g=guessEx(($("neName")||{}).value); const m=($("neMuscle")||{}).value; return (g&&g.fig) || MUSCLE_FIG[m] || "bench"; }
+function nePreview(fromName){
+  const name=($("neName")||{}).value||"", g=guessEx(name), eq=equipOfName(name)||(g&&g.equip);
+  if(fromName){ if(eq && $("neEquip")) $("neEquip").value=eq; if(g&&g.muscle && $("neMuscle") && MUSCLES.includes(g.muscle)) $("neMuscle").value=g.muscle; }
+  const fig=neFig(), pv=$("nePrev"); if(pv){ FIG_ALIAS.__ne=fig; pv.innerHTML=figSVG("__ne", (FIG[fig]&&FIG[fig].thumbT!=null)?FIG[fig].thumbT:1)+`<i style="background:${MUSCLE_COLOR[($("neMuscle")||{}).value]||"#8e8e93"}"></i>`; }
+  const ht=$("neHint"); if(ht) ht.textContent = g&&g.like ? `Icon wie „${g.like}“ – Gerät und Muskel kannst du anpassen.` : name.trim().length>=3 ? "Kein passendes Icon gefunden – es richtet sich nach dem gewählten Muskel." : "Icon, Gerät und Muskel werden anhand des Namens vorgeschlagen.";
+}
+document.addEventListener("input", ev=>{ if(ev.target.id==="neName") nePreview(true); });
+document.addEventListener("change", ev=>{ if(ev.target.id==="neMuscle"||ev.target.id==="neEquip") nePreview(false); });
+function makeCustomEx(){
+  const name=($("neName")||{}).value.trim(); if(!name){ toast("Bitte einen Namen eingeben"); return null; }
+  const id="c"+Date.now().toString(36), equip=$("neEquip").value, muscle=$("neMuscle").value, fig=neFig();
+  S.settings.customEx=S.settings.customEx||{}; S.settings.customEx[id]={id,name,equip,muscle,fig,reps:10,sets:3,rest:120};
+  EX_MUSCLES[id]={[VOL_MUSCLE(muscle)]:1}; FIG_ALIAS[id]=fig;
+  try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
+  saveLocal(); saveSettingsRemote(); return id;
+}
+function libNewModal(){ modal(`<h3>Eigene Übung</h3>${newExForm("libNewEx")}`); setTimeout(()=>{ nePreview(false); const i=$("neName"); if(i) i.focus(); },60); }
 function inPlanWhere(id){ return PLAN.workouts.filter(w=>w.exercises.some(e=>e.id===id)).map(w=>w.name); }
 function renderLibrary(){
   UI.libCat = UI.libCat || "Meine";
   return `<div class="home lib">
-    <div class="h-title">Übungen</div><div class="h-sub">${LIB.length} Übungen</div>
+    <div class="h-title">Übungen</div><div class="h-sub">${libAll().length} Übungen</div>
+    <button class="ed-add lib-new" data-act="libNew">+ Eigene Übung</button>
     <div class="lib-search"><input id="libQ" type="search" placeholder="Übung suchen" value="${esc(UI.libQ||"")}" autocomplete="off"></div>
     <div class="lib-cats">${LIB_CATS.map(c=>`<button class="${UI.libCat===c?"on":""}" data-act="libCat" data-c="${c}">${c}</button>`).join("")}</div>
     <div id="libList">${libListHTML()}</div>
   </div>`;
 }
 // Übungsname: im Plan gilt der Planname (so heißt die Übung auch im Training und unter Fortschritt)
-function exNameOf(id){ for(const w of PLAN.workouts){ const e=w.exercises.find(x=>x.id===id); if(e) return e.name; } const x=LIB.find(l=>l.id===id); return x?x.name:id; }
+function exNameOf(id){ for(const w of PLAN.workouts){ const e=w.exercises.find(x=>x.id===id); if(e) return e.name; } const x=libFind(id); return x?x.name:id; }
 function libListHTML(){
   const q=(UI.libQ||"").toLowerCase().trim();
   const mine=UI.libCat==="Meine"; const planIds=PLAN.workouts.flatMap(w=>w.exercises.map(e=>e.id));
-  let items=LIB.filter(x=>(UI.libCat==="Alle"||x.cat===UI.libCat||(mine&&planIds.includes(x.id))) && (!q || x.name.toLowerCase().includes(q) || exNameOf(x.id).toLowerCase().includes(q) || (x.en||"").toLowerCase().includes(q) || x.prim.toLowerCase().includes(q) || x.equip.toLowerCase().includes(q)));
+  let items=libAll().filter(x=>(UI.libCat==="Alle"||x.cat===UI.libCat||(mine&&(planIds.includes(x.id)||x.custom))) && (!q || x.name.toLowerCase().includes(q) || exNameOf(x.id).toLowerCase().includes(q) || (x.en||"").toLowerCase().includes(q) || x.prim.toLowerCase().includes(q) || x.equip.toLowerCase().includes(q)));
   if(mine) items.sort((a,b)=>planIds.indexOf(a.id)-planIds.indexOf(b.id));
-  if(!items.length) return `<div class="empty">${mine&&!q?"Noch keine Übungen im Plan.":"Keine Übung gefunden."}</div>`;
-  return `<div class="ex-list">${items.map(x=>{ const ex={...BASE_EX[x.id], id:x.id, muscle:x.prim}; const wh=inPlanWhere(x.id);
+  if(!items.length) return `<div class="empty">${mine&&!q?"Noch keine Übungen in deinen Splits. Tippe unter „Alle“ eine Übung an und füge sie einem Split hinzu.":"Keine Übung gefunden."}</div>`;
+  return `<div class="ex-list">${items.map(x=>{ const ex={...(exDef(x.id)||{}), id:x.id, muscle:x.prim}; const wh=inPlanWhere(x.id);
     return `<button class="ex-row" data-act="libOpen" data-id="${x.id}">${thumb(ex)}<div style="min-width:0"><div class="ex-name">${esc(exNameOf(x.id))}</div><div class="ex-meta"><span>${esc(x.equip)}</span><span>${esc(x.prim)}</span></div>${wh.length?`<span class="rchip plan" style="margin-top:4px">Im Plan: ${wh.join(", ")}</span>`:""}</div></button>`; }).join("")}</div>`;
 }
 function libOpen(id){
-  const x=LIB.find(l=>l.id===id); if(!x) return;
-  const ex={...BASE_EX[id], id, muscle:x.prim}; const wh=inPlanWhere(id);
+  const x=libFind(id); if(!x) return;
+  const ex={...(exDef(id)||{}), id, muscle:x.prim}; const wh=inPlanWhere(id);
   const hasHist = exSessions(id).length>0;
   const vid="https://www.youtube.com/results?search_query="+encodeURIComponent("how to "+(x.en||x.name)+" proper form");
   let host=""; try{ host=new URL(x.src).hostname.replace(/^www\./,""); }catch(_){}
@@ -5553,7 +5614,9 @@ function libOpen(id){
       return `<div class="fv-l" style="margin-top:14px">Bestwerte</div><div class="lib-pr"><div><span>Höchstgewicht</span><b>${fmtNum(b.kg)} kg × ${b.kgReps}</b><em>${dt(b.kgT)}</em></div><div><span>Bester Satz (≈ 1RM)</span><b>${fmtNum(Math.round(b.e1*10)/10)} kg</b><em>${b.e1Set?fmtNum(b.e1Set.kg)+" kg × "+b.e1Set.reps+" · "+dt(b.e1Set.t):""}</em></div></div>`; })()}
     ${x.how?`<div class="lib-how"><div class="lib-how-t">So geht's</div><ol>${x.how.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>${x.src?`<a class="lib-src" href="${x.src}" target="_blank" rel="noopener">Quelle: ${esc(host)}</a>`:""}</div>`:""}
     ${wh.length?`<p style="margin:12px 0 0">Bereits im Plan: <b style="color:var(--ink)">${wh.join(", ")}</b></p>`:""}
-    ${PLAN.workouts.filter(w=>!w.exercises.some(e=>e.id===id)).map(w=>`<button class="m-btn pri" data-act="libAdd" data-id="${id}" data-w="${w.id}">Zu ${w.name} hinzufügen</button>`).join("")}
+    ${PLAN.workouts.filter(w=>!w.exercises.some(e=>e.id===id)).map(w=>`<button class="m-btn pri" data-act="libAdd" data-id="${id}" data-w="${w.id}">Zu ${esc(w.name)} hinzufügen</button>`).join("")}
+    ${!PLAN.workouts.length?`<p class="nu-hint" style="margin:12px 0 8px">Um die Übung zu trainieren, lege zuerst einen Split an.</p><button class="m-btn pri" data-act="wNewFromLib" data-id="${id}">+ Split anlegen</button>`:""}
+    ${x.custom&&!wh.length?`<button class="m-btn red" data-act="libDelEx" data-id="${id}">Eigene Übung löschen</button>`:""}
     <a class="m-btn vid-btn" href="${vid}" target="_blank" rel="noopener">▶ Video-Anleitung (YouTube)</a>
     ${hasHist?`<button class="m-btn" data-act="exChart" data-ex="${id}">Verlauf ansehen</button>`:""}`);
 }
@@ -5617,7 +5680,7 @@ Antworte NUR mit JSON: {"action":"up"|"hold"|"down","kg":<Zahl>,"kurz":"<Grund i
 }
 function libAddDummy(){}
 function libAdd(id, wid){
-  const w=W(wid); const d=BASE_EX[id];
+  const w=W(wid); const d=exDef(id)||{name:id};
   const list=w.exercises.map(e=>({id:e.id, sets:e.sets, reps:e.reps, repsMax:e.repsMax||null, rest:e.rest||S.settings.rest}));
   list.push({id, sets:d.sets||3, reps:d.reps||10, repsMax:null, rest:d.rest||120});
   S.settings.plan=S.settings.plan||{}; S.settings.plan[wid]=list;
@@ -5870,7 +5933,10 @@ document.addEventListener("click", ev=>{
     case "volDetail": volDetail(b.dataset.m); break;
     case "exChart": openExChart(b.dataset.ex); break;
     case "libCat": UI.libCat=b.dataset.c; renderHome(); break;
-    case "libOpen": { libOpen(b.dataset.id); const x=LIB.find(l=>l.id===b.dataset.id); if(x) startLibAnim(x.id, x.prim); break; }
+    case "libOpen": { libOpen(b.dataset.id); const x=libFind(b.dataset.id); if(x) startLibAnim(x.id, x.prim); break; }
+    case "libNew": libNewModal(); break;
+    case "wNewFromLib": UI.wAfterAdd=b.dataset.id; wEditModal(null); break;
+    case "libDelEx": { const id=b.dataset.id; if(S.settings.customEx) delete S.settings.customEx[id]; try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} saveLocal(); saveSettingsRemote(); closeModal(); renderHome(); toast("Übung gelöscht"); break; }
     case "libAdd": libAdd(b.dataset.id, b.dataset.w); break;
     case "edStart": editStart(b.dataset.w); break;
     case "edCancel": UI.edit=null; renderPreview(); break;
@@ -5915,7 +5981,7 @@ document.addEventListener("click", ev=>{
     case "obFile": { const f=$("obFile"); if(f) f.click(); break; }
     case "obImgs": { const f=$("obImgs"); if(f) f.click(); break; }
     case "obEmpty": { S.setupDone=true; S.settings.workouts=[]; S.settings.plan={}; S.settings.order={}; S.settings.days=S.settings.days||[]; S.settings.planName=S.settings.planName||"Mein Plan";
-      try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} buildPlan(); saveLocal(); saveSettingsRemote(); UI.tab="train"; renderAll(); toast("Los geht's – lege dein erstes Training an"); break; }
+      try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} buildPlan(); saveLocal(); saveSettingsRemote(); UI.tab="train"; renderAll(); toast("Los geht's – lege deinen ersten Split an"); break; }
     case "wNew": wEditModal(null); break;
     case "wRename": wEditModal(b.dataset.w); break;
     case "wSave": wSave(); break;
@@ -6072,12 +6138,13 @@ $("modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModalUs
 document.addEventListener("submit", ev=>{
   if(ev.target.dataset.form==="newEx"){
     ev.preventDefault();
-    const name=$("neName").value.trim(); if(!name){ toast("Bitte einen Namen eingeben"); return; }
-    const id="c"+Date.now().toString(36), equip=$("neEquip").value, muscle=$("neMuscle").value;
-    S.settings.customEx=S.settings.customEx||{}; S.settings.customEx[id]={id,name,equip,muscle,reps:10,sets:3,rest:equip==="Körpergewicht"?120:120};
-    EX_MUSCLES[id]={[muscle]:1};
+    const id=makeCustomEx(); if(!id) return;
     UI.edit.list.push({id,sets:3,reps:10,repsMax:null,rest:120});
     saveLocal(); closeModal(); renderPreview(); return;
+  }
+  if(ev.target.dataset.form==="libNewEx"){
+    ev.preventDefault(); const id=makeCustomEx(); if(!id) return;
+    closeModal(); UI.libCat="Alle"; UI.libQ=""; renderHome(); toast("Übung erstellt"); libOpen(id); return;
   }
   if(ev.target.dataset.form!=="body") return;
   ev.preventDefault();

@@ -873,7 +873,7 @@ html,body{overflow-x:clip}
 .modal.open .modal-box{transform:none;opacity:1}
 .modal-box.swap{animation:mSwap .2s ease}
 @keyframes mSwap{from{opacity:.35;transform:translateY(8px)}to{opacity:1;transform:none}}
-body.m-lock{position:fixed;left:0;right:0;overflow:hidden;height:auto;min-height:100%}
+/* Hintergrund bei offenem Fenster: kein Umbau des Layouts (sonst schwarze Balken/Sprünge in Safari) – Scrollen wird per Touch-Sperre verhindert */
 /* Tabs & Unterreiter: sanft einblenden statt hart umschalten */
 .v-in{animation:vIn .18s cubic-bezier(.2,.8,.2,1) both}
 @keyframes vIn{from{opacity:0}to{opacity:1}}
@@ -5769,8 +5769,18 @@ function libAdd(id, wid){
 
 /* ================= Finish ================= */
 /* Hintergrund sperren, ohne dass die Seite nach oben springt: Position merken, Seite fixieren, beim Schließen zurück */
-function mLock(){ const b=document.body; if(b.classList.contains("m-lock")) return; const y=window.scrollY||0; b.dataset.ly=String(y); b.style.top=(-y)+"px"; b.classList.add("m-lock"); }
-function mUnlock(){ const b=document.body; if(!b.classList.contains("m-lock")) return; const y=+b.dataset.ly||0; b.classList.remove("m-lock"); b.style.top=""; delete b.dataset.ly; if(y) window.scrollTo(0,y); }
+function mLock(){ document.body.classList.add("m-lock"); }
+function mUnlock(){ document.body.classList.remove("m-lock"); }
+// Bei offenem Fenster: Wischen auf dem Hintergrund scrollt die Seite nicht mit; im Fenster selbst nur, wenn es scrollen kann
+(function(){ let sy=0;
+  const canScroll=(el,dy)=>{ for(let n=el; n && n!==document.body; n=n.parentElement){ if(!(n instanceof Element)) continue; const cs=getComputedStyle(n);
+      if(/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight>n.clientHeight+1){ if(dy<0 && n.scrollTop+n.clientHeight<n.scrollHeight-1) return true; if(dy>0 && n.scrollTop>0) return true; }
+      if(n.id==="modalbox") break; } return false; };
+  document.addEventListener("touchstart", e=>{ sy=e.touches[0]?e.touches[0].clientY:0; }, {passive:true});
+  document.addEventListener("touchmove", e=>{ if(!document.body.classList.contains("m-lock")) return; const box=$("modalbox"); const t=e.target;
+    const dy=(e.touches[0]?e.touches[0].clientY:0)-sy; if(box && box.contains(t) && canScroll(t,dy)) return; if(e.cancelable) e.preventDefault(); }, {passive:false});
+  document.addEventListener("wheel", e=>{ if(!document.body.classList.contains("m-lock")) return; const box=$("modalbox"); if(box && box.contains(e.target) && canScroll(e.target,-e.deltaY)) return; e.preventDefault(); }, {passive:false});
+})();
 function modal(html){ const M=$("modal"), B=$("modalbox"), wasOpen=M.classList.contains("open");
   if(wasOpen){ B.classList.remove("swap"); void B.offsetWidth; B.classList.add("swap"); }
   mLock(); clearTimeout(modal.t);

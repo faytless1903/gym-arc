@@ -901,7 +901,8 @@
         '<li><b>Statistik berechnen</b> („Calculate Statistics“): <b>Summe</b> → umbenennen in <i>Schritte</i></li>' +
         '<li>Nochmal <b>Health-Beispiele suchen</b>: Typ <b>Aktive Energie</b>, Startdatum <b>ist heute</b> → <b>Statistik berechnen: Summe</b> → umbenennen in <i>Aktiv</i></li>' +
         '<li><b>Inhalte von URL abrufen</b> („Get Contents of URL“): Adresse von oben, Methode <b>POST</b>, Hauptteil <b>JSON</b> mit drei Feldern: <code>token</code> (Text: dein Schlüssel), <code>steps</code> (Zahl: <i>Schritte</i>), <code>active</code> (Zahl: <i>Aktiv</i>)</li>' +
-        '<li>Unter <b>Automation</b> → <b>Tageszeit</b>: z. B. 12:00, 18:00 und 21:30 → <b>Sofort ausführen</b></li></ol>' +
+        '<li>Unter <b>Automation</b> → <b>App</b> → eine App, die du mehrmals täglich öffnest (z. B. <b>Instagram</b>) → <b>Wird geöffnet</b> → <b>Sofort ausführen</b> → den Kurzbefehl auswählen</li></ol>' +
+        '<p class="nu-hint" style="margin-top:8px">Warum nicht nach Uhrzeit? Bei gesperrtem iPhone gibt iOS keine Health-Daten heraus – eine Automation zur festen Uhrzeit läuft dann ins Leere. Beim Öffnen einer App ist das iPhone immer entsperrt.</p>' +
         '<button class="m-btn pri" data-act="closeModal">Fertig</button>' +
         (fresh ? '' : '<button class="m-btn" data-ghnew="1" style="margin-top:8px">Neuen Schlüssel erzeugen</button>'));
       if(fresh) toast2("Neuer Schlüssel – im Kurzbefehl ersetzen");

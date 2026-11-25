@@ -1907,7 +1907,16 @@ function wIcon(w){
   let fid=null, eid=null; for(const e of ((w&&w.exercises)||[])){ const f=figOf(e.id); if(f){ fid=f; eid=e.id; break; } }
   if(!fid){ const n=String((w&&w.name)||""); const m=W_NAME_FIG.find(([re])=>re.test(n)); fid=m?m[1]:"deadlift"; eid=fid; }
   const fd=FIG[fid]; const t=eid==="lz"||fid==="lz"?0:(fd&&fd.thumbT!=null?fd.thumbT:1);
-  return `<span class="wb-fig">${figSVG(fid,t)}</span>`; }
+  return `<span class="wb-fig">${figFit(fid,t)}</span>`; }
+// Kleine Figuren (z. B. Kniebeuge, Kreuzheben) auf dieselbe Größe wie die Geräte-Figuren bringen
+const FIG_FIT={};
+function figFit(fid, t){
+  const svg=figSVG(fid,t); if(!svg) return svg; const k=fid+"|"+t;
+  if(!(k in FIG_FIT)){ FIG_FIT[k]=null;
+    try{ const d=document.createElement("div"); d.style.cssText="position:absolute;left:-9999px;top:0;width:100px;height:100px;visibility:hidden"; d.innerHTML=svg; document.body.appendChild(d);
+      const bb=d.querySelector("svg").getBBox(); d.remove(); const m=Math.max(bb.width,bb.height);
+      if(m>10 && m<72){ const side=m/0.84, cx=bb.x+bb.width/2, cy=bb.y+bb.height/2; FIG_FIT[k]=`${(cx-side/2).toFixed(1)} ${(cy-side/2).toFixed(1)} ${side.toFixed(1)} ${side.toFixed(1)}`; } }catch(_){} }
+  return FIG_FIT[k] ? svg.replace('viewBox="0 0 100 100"', `viewBox="${FIG_FIT[k]}"`) : svg; }
 /* Voraussichtliches Trainingsende: offene Sätze × (Satzdauer + Pause der Übung), kalibriert an deinen bisherigen Trainingszeiten */
 function etaFactor(){
   if(etaFactor.c && etaFactor.n===S.history.length) return etaFactor.c;

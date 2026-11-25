@@ -185,6 +185,9 @@ body.has-resume .home{padding-bottom:calc(var(--tb-h,64px) + 96px)}
 .sheet.lvl2{z-index:13;height:calc(100% - var(--safe-t) - 24px);background:var(--surface)}
 .scrim.lvl2{z-index:12}
 .sheet-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px calc(var(--safe-b) + 40px)}
+/* keine sichtbaren Scrollbalken (iOS zeigt sie sonst auch bei minimalem Überstand) – Scrollen funktioniert weiter */
+.sheet-scroll,.modal,.modal *,#modalbox,.home{scrollbar-width:none}
+.sheet-scroll::-webkit-scrollbar,.modal::-webkit-scrollbar,.modal *::-webkit-scrollbar,#modalbox::-webkit-scrollbar,html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}
 .has-dock .sheet-scroll{padding-bottom:calc(var(--safe-b) + 116px)}
 .has-dock.has-next .sheet-scroll{padding-bottom:calc(var(--safe-b) + 184px)}
 #dockNext .next-btn{pointer-events:auto;margin:0 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -24,6 +24,8 @@
       '.ga-acc{background:var(--tile);border-radius:16px;padding:14px;margin-bottom:10px}.ga-acc-h b{display:block;font-size:16px;word-break:break-all}.ga-acc-h span{font-size:13px;color:var(--muted)}' +
       '.ga-acc-n{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 4px}.ga-acc-n div{background:var(--surface);border-radius:12px;padding:8px 10px}.ga-acc-n span,.ga-acc-n em{display:block;font-size:12px;color:var(--muted);font-style:normal}.ga-acc-n b{display:block;font-size:16px}' +
       '.ga-acc .gs-row{min-height:46px}.ga-lim{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}.ga-lim span{flex:1}.ga-lim button{border:0;border-radius:10px;padding:7px 12px;font:inherit;font-weight:700;background:var(--surface);color:var(--muted)}.ga-lim button.on{background:var(--accent);color:#fff}' +
+      '.ga-blk{display:block;width:100%;margin-top:10px;border:0;border-radius:12px;padding:10px;font:inherit;font-weight:700;background:var(--surface);color:#e5484d}.ga-blk.go{background:#e5484d;color:#fff}.ga-acc-off .ga-blk{color:var(--text,inherit)}' +
+      '.ga-blkt{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 2px;font:inherit;font-weight:700;color:var(--muted)}' +
       '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}' +
       '.ga-use{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;padding:0;font:inherit;color:var(--muted);font-size:14px;line-height:1.4}.ga-use i{font-style:normal;color:var(--accent);font-size:18px;flex-shrink:0}' +
       '.ga-ul{background:var(--tile);border-radius:14px;padding:0 14px}.ga-ur{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}.ga-ur+.ga-ur{border-top:1px solid var(--line)}.ga-ur b{display:block;font-size:15px;font-weight:650;color:var(--ink)}.ga-ur span{font-size:12px;color:var(--muted)}.ga-ur em{font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}' +
@@ -93,7 +95,7 @@
           headers: Object.assign({ apikey: KEY, Authorization: "Bearer " + t, "Content-Type": "application/json" }, extra || {}),
           body: body ? JSON.stringify(body) : undefined });
       }catch(e){ throw E("unavailable", "Keine Verbindung"); }
-      if(r.status === 401 && i === 0) continue;
+      if((r.status === 401 || r.status === 403) && i === 0) continue;   // 403: evtl. gesperrt → Neuanmeldung prüft das
       if(!r.ok){ var txt = ""; try{ txt = await r.text(); }catch(_){}
         throw E(r.status === 429 ? "resource_exhausted" : r.status >= 500 ? "unavailable" : r.status === 401 || r.status === 403 ? "permission-denied" : "invalid-argument", txt.slice(0, 200)); }
       if(r.status === 204) return null;
@@ -238,7 +240,7 @@
       if(!pw){ msg("Bitte Passwort eingeben – oder den Link per E-Mail nutzen."); return; }
       $("gaPwGo").disabled = true; msg("");
       try{ var d = await authCall("token?grant_type=password", { email: em, password: pw }); keep(d, em); await afterLogin(); }
-      catch(e){ $("gaPwGo").disabled = false; msg(e.code === "unavailable" ? "Keine Verbindung." : e.code === "rate_limited" ? "Zu viele Versuche – bitte kurz warten." : "E-Mail oder Passwort falsch. Noch kein Passwort? In der App am PC unter Zahnrad → Konto festlegen."); }
+      catch(e){ $("gaPwGo").disabled = false; msg(e.code === "unavailable" ? "Keine Verbindung." : e.code === "rate_limited" ? "Zu viele Versuche – bitte kurz warten." : /banned/i.test(e.message || "") ? "Dieses Konto wurde gesperrt." : "E-Mail oder Passwort falsch. Noch kein Passwort? In der App am PC unter Zahnrad → Konto festlegen."); }
     }
     $("gaPwGo").onclick = pwLogin; onEnter("gaPw", pwLogin);
     async function send(){
@@ -291,7 +293,7 @@
           if(!d) throw err || E("auth"); }
         else d = await authCall("verify", { type: "email", email: em, token: c });
         keep(d, em); await afterLogin(); }
-      catch(e){ $("gaVerify").disabled = false; msg(e.code === "unavailable" ? "Keine Verbindung." : "Code ungültig oder abgelaufen."); }
+      catch(e){ $("gaVerify").disabled = false; msg(e.code === "unavailable" ? "Keine Verbindung." : /banned/i.test(e.message || "") ? "Dieses Konto wurde gesperrt." : "Code ungültig oder abgelaufen."); }
     }
     $("gaVerify").onclick = verify; onEnter("gaCode", verify); $("gaBack").onclick = function(){ showLogin(em); };
     setTimeout(function(){ try{ $("gaCode").focus(); }catch(_){} }, 50);
@@ -508,6 +510,10 @@
     else if(k === "accs"){ accList(); }
     else if(k === "accAllow"){ accSet(b.getAttribute("data-u"), b.getAttribute("data-on") !== "1", +b.getAttribute("data-lim")); }
     else if(k === "accLim"){ accSet(b.getAttribute("data-u"), true, +b.getAttribute("data-lim")); }
+    else if(k === "accBlock"){ b.textContent = "Wirklich sperren? Nochmal tippen"; b.setAttribute("data-gacc", "accBlockGo"); b.classList.add("go"); }
+    else if(k === "accBlockGo"){ b.disabled = true; accBlock(b.getAttribute("data-u"), true); }
+    else if(k === "accUnblock"){ b.disabled = true; accBlock(b.getAttribute("data-u"), false); }
+    else if(k === "accShowBlocked"){ var el = document.getElementById("gaBlk"); if(el){ var o = el.hidden; el.hidden = !o; b.textContent = (o ? "▾ " : "▸ ") + b.getAttribute("data-t"); } }
   }, true);
   /* Besitzer: alle Konten mit Claude-Kosten je Monat und Freigabe */
   async function rpc(name, body){
@@ -525,7 +531,8 @@
   async function accList(){
     modal('<h3>Konten & Kosten</h3><p class="nu-hint">Wird geladen …</p>');
     try{
-      var L = await rpc("ga_accounts") || [];
+      var all = await rpc("ga_accounts") || [];
+      var L = all.filter(function(x){ return !x.blocked; }), B = all.filter(function(x){ return !!x.blocked; });
       var mon = new Date().toLocaleDateString("de-DE", { month: "long" }), prev = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("de-DE", { month: "long" });
       var sum = L.reduce(function(a, x){ return a + (+x.cost_month || 0); }, 0), sumP = L.reduce(function(a, x){ return a + (+x.cost_prev || 0); }, 0);
       modal('<h3>Konten & Kosten</h3><p class="pc-sub" style="margin:-4px 0 12px">Claude gesamt · ' + mon + ': ' + usd(sum) + ' · ' + prev + ': ' + usd(sumP) + '</p>' +
@@ -534,12 +541,20 @@
           return '<div class="ga-acc"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + (own ? ' <span class="nx">Du</span>' : '') + '</b><span>Konto seit ' + dDE(x.created_at) + ' · zuletzt aktiv ' + dDE(x.last_sign_in_at) + '</span></div>' +
             '<div class="ga-acc-n"><div><span>' + mon + '</span><b>' + usd(x.cost_month) + '</b><em>' + (+x.n_month || 0) + ' Anfragen</em></div><div><span>' + prev + '</span><b>' + usd(x.cost_prev) + '</b><em>' + (+x.n_prev || 0) + ' Anfragen</em></div><div><span>Gesamt</span><b>' + usd(x.cost_total) + '</b><em>&nbsp;</em></div></div>' +
             (own ? '' : '<div class="gs-row"><span>Claude-Funktionen</span><button class="gs-sw' + (on ? ' on' : '') + '" data-gacc="accAllow" data-u="' + x.user_id + '" data-on="' + (on ? 1 : 0) + '" data-lim="' + lim + '" aria-label="Claude freigeben"></button></div>' +
-              (on ? '<div class="ga-lim"><span>Monatslimit</span>' + [1, 2, 5].map(function(v){ return '<button class="' + (lim === v ? 'on' : '') + '" data-gacc="accLim" data-u="' + x.user_id + '" data-lim="' + v + '">' + v + ' $</button>'; }).join("") + '</div>' : '')) +
+              (on ? '<div class="ga-lim"><span>Monatslimit</span>' + [1, 2, 5].map(function(v){ return '<button class="' + (lim === v ? 'on' : '') + '" data-gacc="accLim" data-u="' + x.user_id + '" data-lim="' + v + '">' + v + ' $</button>'; }).join("") + '</div>' : '') +
+              '<button class="ga-blk" data-gacc="accBlock" data-u="' + x.user_id + '">Konto sperren</button>') +
             '</div>';
         }).join("") +
-        '<p class="nu-hint" style="margin-top:10px">Neue Konten können Claude erst nutzen, wenn du sie hier freigibst. Das Limit gilt pro Monat; dein Anthropic-Limit gilt zusätzlich für alle zusammen.</p>' +
+        (B.length ? '<button class="ga-blkt" data-gacc="accShowBlocked" data-t="Gesperrte Konten (' + B.length + ')">▸ Gesperrte Konten (' + B.length + ')</button><div id="gaBlk" hidden>' +
+          B.map(function(x){ return '<div class="ga-acc ga-acc-off"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + '</b><span>Konto seit ' + dDE(x.created_at) + ' · gesperrt</span></div>' +
+            '<button class="ga-blk" data-gacc="accUnblock" data-u="' + x.user_id + '">Entsperren</button></div>'; }).join("") + '</div>' : '') +
+        '<p class="nu-hint" style="margin-top:10px">Gesperrte Konten verschwinden aus der Liste, werden sofort abgemeldet und kommen nicht mehr an die App. Ihre Daten bleiben gespeichert. Neue Konten können Claude erst nutzen, wenn du sie hier freigibst. Das Limit gilt pro Monat; dein Anthropic-Limit gilt zusätzlich für alle zusammen.</p>' +
         '<button class="m-btn" data-act="settings" style="margin-top:8px">Zurück</button>');
     }catch(e){ modal('<h3>Konten & Kosten</h3><p>Konnte nicht geladen werden.</p><button class="m-btn" data-act="settings">Zurück</button>'); }
+  }
+  async function accBlock(uid, block){
+    try{ await rpc("ga_set_blocked", { target: uid, block: !!block }); toast2(block ? "Konto gesperrt" : "Konto entsperrt"); accList(); }
+    catch(e){ toast2("Nicht gespeichert: " + (e.message || e.code)); accList(); }
   }
   async function accSet(uid, allow, lim){
     try{ await rpc("ga_set_access", { target: uid, allow: !!allow, lim: lim || 2 }); toast2(allow ? "Freigegeben" : "Gesperrt"); accList(); }

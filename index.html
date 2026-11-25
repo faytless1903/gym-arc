@@ -1794,7 +1794,10 @@ const UI = { tab:"train", preview:null, workoutOpen:false, ex:null, timerOpen:fa
 function nameSync(){ const P={}; PLAN.workouts.forEach(w=>w.exercises.forEach(e=>P[e.id]=e.name)); (S.history||[]).forEach(h=>(h.exercises||[]).forEach(e=>{ if(P[e.exId] && e.name!==P[e.exId]) e.name=P[e.exId]; })); }
 // Tabwechsel: neue Seite im selben Frame einblenden (vorher blitzte sie erst voll auf und blendete dann nochmal ein)
 function renderHome(){ renderHomeInner(); if(renderHome._anim){ renderHome._anim=false; const c=$("home").firstElementChild; if(c){ c.classList.remove("v-in"); void c.offsetWidth; c.classList.add("v-in"); } } }
-function renderHomeInner(){ try{ nameSync(); }catch(_){}
+// Laufendes Training eines gelöschten Splits verwerfen – sonst stürzt die App beim Antippen ab
+function activeOrphanFix(){ if(!S.active || !CLOUD_LOADED || typeof W!=="function" || W(S.active.workoutId)) return false;
+  S.active=null; persist(); try{ document.body.classList.toggle("has-resume", false); }catch(_){} try{ renderResume(); }catch(_){} try{ updateFab(); }catch(_){} return true; }
+function renderHomeInner(){ try{ nameSync(); }catch(_){} try{ activeOrphanFix(); }catch(_){}
   const el = $("home");
   const view = UI.tab+"|"+(UI.tab==="nutrition"?UI.nuTab:"");
   if(view!==renderHome.last){ renderHome.last=view; renderHome._anim=true; }
@@ -3290,6 +3293,7 @@ function wDelAsk(wid){ const w=W(wid); if(!w) return;
   modal(`<h3>„${esc(w.name)}“ löschen?</h3><p>Der Plan dieses Trainings wird entfernt. Bereits absolvierte Trainings bleiben im Verlauf.</p>
     <button class="m-btn red" data-act="wDelGo" data-w="${wid}">Endgültig löschen</button><button class="m-btn" data-act="closeModal">Abbrechen</button>`); }
 function wDel(wid){
+  if(S.active && S.active.workoutId===wid){ S.active=null; persist(); try{ closeEx(); }catch(_){} try{ closeWorkout(); }catch(_){} }
   S.settings.workouts=(S.settings.workouts||[]).filter(x=>x.id!==wid);
   if(S.settings.plan) delete S.settings.plan[wid]; if(S.settings.order) delete S.settings.order[wid];
   try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}

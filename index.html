@@ -3666,6 +3666,14 @@ const NU_RATE = [
   {k:.7, l:"Empfohlen", d:"0,7 % KG/Woche – Studienoptimum für Trainierende"},
   {k:1.0, l:"Zügig", d:"1,0 % KG/Woche – schneller, mehr Risiko für Muskelverlust"},
 ];
+const NU_GOAL = [{k:"cut",l:"Abnehmen"},{k:"hold",l:"Halten"},{k:"bulk",l:"Aufbau"}];
+const NU_BULK = [
+  {k:"lean",   l:"Leicht",  p:.05, d:"+5 % über Bedarf – kaum Fett, langsamer Aufbau"},
+  {k:"mod",    l:"Moderat", p:.10, d:"+10 % – Standard für Trainierte"},
+  {k:"strong", l:"Stark",   p:.15, d:"+15 % – schneller, mehr Fettzunahme"},
+];
+// Ziel: ausdrücklich gewählt oder (alte Daten) aus dem Zielgewicht abgeleitet
+function nuGoal(n, kg, tKg){ if(n.goal) return n.goal; if(tKg && tKg<kg-0.3) return "cut"; if(tKg && tKg>kg+0.3) return "bulk"; return n.targetKfa!=null?"cut":"hold"; }
 function nuDefaults(){
   const lastBody=(S.body||[]).slice().sort((a,b)=>a.d<b.d?-1:1).pop();
   return {sex:"m", age:isOwner()?26:null, height:isOwner()?181:null, kg:lastBody?lastBody.kg:(isOwner()?80:null), kfa:null, kfaSrc:null, kfaRange:null, targetKg:null, targetKfa:null, act:"sit", rate:.7};
@@ -3724,22 +3732,27 @@ function nuCalc(n){
   // Zielgewicht: direkt angegeben oder aus Ziel-KFA bei gleicher Magermasse
   let tKg = n.targetKg? +n.targetKg : null;
   if(!tKg && n.targetKfa && lbm!=null) tKg = lbm/(1-n.targetKfa/100);
+  const goal = nuGoal(n, kg, tKg);
+  if(goal==="bulk") tKg = n.bulkKg && +n.bulkKg>kg ? +n.bulkKg : null;
+  if(goal==="hold") tKg = null;
   const tKfaFromKg = (tKg && lbm!=null) ? (1 - lbm/tKg)*100 : null;  // erreichbarer KFA bei Muskelerhalt
-  let mode="hold", kcal=tdee, perWeek=0, weeks=null, note="";
-  if(tKg && tKg < kg-0.3){
+  let mode="hold", kcal=tdee, perWeek=0, weeks=null, note="", surplus=0;
+  if(goal==="cut" && !(tKg && tKg >= kg-0.3)){
     mode="cut"; perWeek = kg*n.rate/100;                              // kg pro Woche
     const deficit = perWeek*7700/7; kcal = tdee - deficit;
-    weeks = Math.ceil((kg-tKg)/perWeek);
+    if(tKg) weeks = Math.ceil((kg-tKg)/perWeek);
     if(deficit/tdee > .25) note="Das Defizit liegt über 25 % deines Bedarfs – lieber ein langsameres Tempo wählen.";
-  } else if(tKg && tKg > kg+0.3){
-    mode="bulk"; perWeek = kg*0.0035;                                 // ~0,35 % KG/Woche bzw. ~1,5 %/Monat
-    kcal = tdee + 300; weeks = Math.ceil((tKg-kg)/perWeek);
+  } else if(goal==="bulk"){
+    mode="bulk"; const b=NU_BULK.find(x=>x.k===n.bulk)||NU_BULK[1];
+    surplus = Math.round(tdee*b.p/10)*10; kcal = tdee + surplus;
+    perWeek = surplus*7/7700;                                          // grobe Obergrenze, Muskelgewebe braucht weniger Energie pro kg
+    if(tKg) weeks = Math.ceil((tKg-kg)/perWeek);
   }
   const protein = Math.round(kg*(mode==="cut"?1.8:1.6));
   const fat = Math.round(Math.max(kg*0.8, kcal*0.22/9));
   const carbs = Math.max(0, Math.round((kcal - protein*4 - fat*9)/4));
   const adj = mode==="cut" ? (+n.kcalAdj||0) : 0; kcal += adj;
-  return {mifflin, katch, bmr, tdee, formulaTdee, realUsed: !!(rt&&rt.ready), lbm, tKg, tKfaFromKg, mode, adj, kcal:Math.round(kcal/10)*10, perWeek, weeks, protein, fat, carbs, note};
+  return {mifflin, katch, bmr, tdee, formulaTdee, realUsed: !!(rt&&rt.ready), lbm, tKg, tKfaFromKg, mode, goal, surplus, adj, kcal:Math.round(kcal/10)*10, perWeek, weeks, protein, fat, carbs, note};
 }
 
 function renderNutrition(){
@@ -3753,8 +3766,11 @@ function renderNutrition(){
     <div class="rng nu-tabs">${[["goals","Ziele"],["track","Tracking"],["cook","Kochen"]].map(([k,l])=>`<button class="${sub===k?"on":""}" data-act="nuTab" data-t="${k}">${l}</button>`).join("")}</div>`;
   if(sub==="track") return `<div class="home nu">${head}${renderCutCard(true)}${renderTracking()}</div>`;
   if(sub==="cook") return `<div class="home nu">${head}${renderCooking()}</div>`;
-  const missing=!(n.height&&n.age) || n.targetKfa==null;
-  const angaben=`<details class="pcard nu-adj" ${missing?"open":""}><summary><h3>Angaben anpassen</h3><span>${[n.kfa!=null?`${fmtNum(n.kfa)} % KFA`:null, n.targetKfa!=null?`Ziel ${fmtNum(n.targetKfa)} %`:null, (NU_RATE.find(a=>a.k===n.rate)||{}).l].filter(Boolean).join(" · ")}</span></summary>
+  const goal=r?r.goal:nuGoal(n, +n.kg, null);
+  const missing=!(n.height&&n.age) || (goal==="cut" && n.targetKfa==null);
+  const angaben=`<details class="pcard nu-adj" ${missing?"open":""}><summary><h3>Angaben anpassen</h3><span>${[(NU_GOAL.find(g=>g.k===goal)||{}).l, n.kfa!=null?`${fmtNum(n.kfa)} % KFA`:null, goal==="cut"&&n.targetKfa!=null?`Ziel ${fmtNum(n.targetKfa)} %`:null, goal==="cut"?(NU_RATE.find(a=>a.k===n.rate)||{}).l:null, goal==="bulk"?(NU_BULK.find(a=>a.k===(n.bulk||"mod"))||{}).l:null].filter(Boolean).join(" · ")}</span></summary>
+      <div class="nu-l" style="margin-top:4px">Ziel</div>
+      <div class="nu-seg">${NU_GOAL.map(g=>`<button class="${goal===g.k?"on":""}" data-act="nuSet" data-k="goal" data-v="${g.k}">${g.l}</button>`).join("")}</div>
       ${missing&&!(n.height&&n.age)?`<div class="nu-hint warn">Trag Größe und Alter ein, damit dein Bedarf berechnet werden kann.</div>`:""}
       <div class="nu-grid">
         ${(()=>{ const has=bodySorted().length; return `<button class="nu-f nu-kgro" data-act="goWeight"><span>Gewicht${has?" · Ø 7 Tage":""}</span><div><b>${has?fmtNum(n.kg):"–"}</b><em>kg</em></div><small>${has?"Eintragen unter Fortschritt ›":"Unter Fortschritt eintragen ›"}</small></button>`; })()}
@@ -3762,8 +3778,12 @@ function renderNutrition(){
       </div>
       <input type="file" id="nuPhoto" accept="image/*" style="display:none">
       ${window.gymArcPhotos ? (n.kfa==null?`<button class="nu-photo" data-act="nuPhoto">Ausgangswert per Foto schätzen</button>`:"") : `<button class="nu-photo" data-act="nuPhoto">${n.kfa!=null?"Körperfett neu per Foto schätzen":"Körperfett per Foto schätzen"}</button>`}
-      <div class="nu-grid" style="margin-top:10px">${field("targetKfa","Ziel-Körperfett",n.targetKfa,"%")}<div class="nu-f nu-tkg"><span>Zielgewicht</span><div><b>${r&&r.tKg?fmtNum(Math.round(r.tKg*10)/10):"–"}</b><em>kg</em></div><small>bei gleicher Muskelmasse</small></div></div>
-      ${r && r.mode==="cut" ? `<div class="nu-l">Tempo</div><div class="nu-seg">${NU_RATE.map(a=>`<button class="${n.rate===a.k?"on":""}" data-act="nuSet" data-k="rate" data-v="${a.k}">${a.l}</button>`).join("")}</div>`:""}
+      ${goal==="cut"?`<div class="nu-grid" style="margin-top:10px">${field("targetKfa","Ziel-Körperfett",n.targetKfa,"%")}<div class="nu-f nu-tkg"><span>Zielgewicht</span><div><b>${r&&r.tKg?fmtNum(Math.round(r.tKg*10)/10):"–"}</b><em>kg</em></div><small>bei gleicher Muskelmasse</small></div></div>
+      <div class="nu-l">Tempo</div><div class="nu-seg">${NU_RATE.map(a=>`<button class="${n.rate===a.k?"on":""}" data-act="nuSet" data-k="rate" data-v="${a.k}">${a.l}</button>`).join("")}</div>
+      <div class="nu-hint" style="margin-top:8px">${(NU_RATE.find(a=>a.k===n.rate)||{}).d||""}</div>`:""}
+      ${goal==="bulk"?`<div class="nu-l">Überschuss</div><div class="nu-seg">${NU_BULK.map(a=>`<button class="${(n.bulk||"mod")===a.k?"on":""}" data-act="nuSet" data-k="bulk" data-v="${a.k}">${a.l}</button>`).join("")}</div>
+      <div class="nu-hint" style="margin-top:8px">${(NU_BULK.find(a=>a.k===(n.bulk||"mod"))||{}).d}</div>
+      <div class="nu-grid" style="margin-top:10px">${field("bulkKg","Zielgewicht (optional)",n.bulkKg,"kg")}</div>`:""}
       <div class="nu-grid" style="margin-top:12px">${field("height","Größe",n.height,"cm","1")}${field("age","Alter",n.age,"J.","1")}</div>
       <div class="nu-seg">${[["m","Mann"],["f","Frau"]].map(([k,l])=>`<button class="${n.sex===k?"on":""}" data-act="nuSet" data-k="sex" data-v="${k}">${l}</button>`).join("")}</div>
       <div class="nu-l">Alltag</div>
@@ -3772,7 +3792,7 @@ function renderNutrition(){
   return `<div class="home nu">${head}${renderCutCard(false)}
     ${r? `<div class="pcard nu-res">
       <div class="nu-kcal"><b>${r.kcal.toLocaleString("de-DE")}</b><span>kcal pro Tag</span></div>
-      <div class="nu-sub">${r.mode==="cut"?`Defizit ${Math.round(r.tdee-r.kcal)} kcal · −${fmtNum(Math.round(r.perWeek*100)/100)} kg/Woche`:r.mode==="bulk"?`Überschuss 300 kcal · +${fmtNum(Math.round(r.perWeek*100)/100)} kg/Woche`:"Gewicht halten"}</div>
+      <div class="nu-sub">${r.mode==="cut"?`Defizit ${Math.round(r.tdee-r.kcal)} kcal · −${fmtNum(Math.round(r.perWeek*100)/100)} kg/Woche`:r.mode==="bulk"?`Überschuss ${r.surplus} kcal · bis ca. +${fmtNum(Math.round(r.perWeek*100)/100)} kg/Woche`:"Gewicht halten"}</div>
       <div class="nu-mac">
         <div><b>${r.protein} g</b><span>Eiweiß</span><em>${r.protein*4} kcal</em></div>
         <div><b>${r.carbs} g</b><span>Kohlenhydrate</span><em>${r.carbs*4} kcal</em></div>
@@ -3798,7 +3818,7 @@ function renderNutrition(){
       <button class="link sm" data-act="nuInfo">So wird gerechnet</button>
       <p class="nu-disc" style="margin:8px 0 0">Schätzwerte für gesunde Erwachsene.</p>
       </details>
-      ${r.mode==="cut" && !cutActive()? `<button class="finish-btn" data-act="cutStart" style="margin-top:12px">Cut starten</button>`:""}
+      ${r.mode==="cut" && r.tKg && !cutActive()? `<button class="finish-btn" data-act="cutStart" style="margin-top:12px">Cut starten</button>`:""}
     </div>` : ""}
     ${angaben}
   </div>`;
@@ -3809,7 +3829,7 @@ function nuInfo(){
   <p style="color:var(--ink)"><b>Grundumsatz:</b> Mifflin-St Jeor (bei bekanntem Körperfett gemittelt mit Katch-McArdle, das die fettfreie Masse nutzt). Mifflin-St Jeor trifft in einer systematischen Übersicht am häufigsten auf ±10 % den gemessenen Wert (Frankenfield et al. 2005).</p>
   <p style="color:var(--ink)"><b>Gesamtbedarf:</b> Grundumsatz × Aktivitätsfaktor (1,5–1,75 inkl. 4× Krafttraining pro Woche).</p>
   <p style="color:var(--ink)"><b>Diät-Tempo:</b> 0,7 % Körpergewicht pro Woche als Standard. In einer Studie mit Athleten und 4× Krafttraining pro Woche verlor die langsame Gruppe (0,7 %) mehr Fett und baute fettfreie Masse auf, die schnelle (1,4 %) nicht (Garthe et al. 2011). 1 kg Fett ≈ 7.700 kcal.</p>
-  <p style="color:var(--ink)"><b>Aufbau:</b> +300 kcal, Ziel ~0,25–0,5 % Körpergewicht pro Woche – bei Trainierten bringt ein größerer Überschuss vor allem mehr Fett.</p>
+  <p style="color:var(--ink)"><b>Aufbau:</b> Überschuss von 5 % (leicht), 10 % (moderat) oder 15 % (stark) über dem Bedarf. Für Trainierte gilt grob ~0,25–0,5 % Körpergewicht pro Woche als sinnvoll; ein größerer Überschuss bringt vor allem mehr Fett. Anfänger können eher stärker aufbauen. Die angezeigte kg/Woche ist eine Obergrenze (1 kg Fett ≈ 7.700 kcal, Muskelgewebe braucht weniger).</p>
   <p style="color:var(--ink)"><b>Eiweiß:</b> 1,6 g/kg (Erhalt/Aufbau) bzw. 1,8 g/kg in der Diät. Eine Meta-Analyse mit 49 Studien fand ab ~1,6 g/kg keinen weiteren Zuwachs an Muskelmasse (Morton et al. 2018); im Defizit gibt ein kleiner Puffer darüber zusätzliche Sicherheit für die Muskeln.</p>
   <p style="color:var(--ink)"><b>Fett:</b> mind. 0,8 g/kg bzw. 22 % der Kalorien, Rest Kohlenhydrate.</p>
   <p>Formeln liefern Startwerte. Entscheidend ist der Verlauf deines Gewichts: Ändert es sich 2–3 Wochen lang nicht wie geplant, ±100–200 kcal anpassen.</p>`);
@@ -3846,7 +3866,7 @@ function nuShrink(file){
 document.addEventListener("change", ev=>{
   if(ev.target.id==="nuPhoto"){ const f=ev.target.files && ev.target.files[0]; ev.target.value=""; nuPhotoAnalyze(f); }
   if(ev.target.dataset && ev.target.dataset.nu){ const n=NU(); const k=ev.target.dataset.nu; const v=num(ev.target.value);
-    n[k] = (v==null||v==="") ? (["targetKg","targetKfa","kfa"].includes(k)? null : n[k]) : +v;
+    n[k] = (v==null||v==="") ? (["targetKg","targetKfa","kfa","bulkKg"].includes(k)? null : n[k]) : +v;
     if(k==="kfa"){ n.kfaSrc = n.kfa==null? null : "manuell"; n.kfaDate=Date.now(); }
     saveNutri(); setTimeout(()=>{ const a=document.activeElement && document.activeElement.dataset && document.activeElement.dataset.nu; keepScrollHome(renderHome); if(a){ const el=document.querySelector(`[data-nu="${a}"]`); if(el) el.focus(); } },0); }
 });
@@ -5097,7 +5117,7 @@ async function recTips(id){
   const sample=await getSample(); if(!sample){ if(box) box.innerHTML=`<p class="nu-hint warn">Empfehlungen sind hier nicht verfügbar.</p>`; return; }
   if(box) box.innerHTML=`<div class="rec-status" style="margin:10px 0"><span class="rs-dot spin"></span>Claude prüft das Rezept …</div>`;
   const n=NU(), nr=nuCalc(n);
-  const prompt=`Du bist Ernährungscoach für einen Kraftsportler im Kaloriendefizit (Cut)${nr?` mit Ziel ca. ${nr.kcal} kcal und ${nr.protein} g Eiweiß pro Tag`:""}. Mach das folgende Rezept cut-tauglicher, ohne dass es seinen Charakter verliert. Eiweiß soll gleich bleiben oder steigen.
+  const prompt=`Du bist Ernährungscoach für einen Kraftsportler ${nr&&nr.mode==="bulk"?"im Muskelaufbau (leichter Kalorienüberschuss)":nr&&nr.mode==="hold"?"beim Gewicht-Halten":"im Kaloriendefizit (Cut)"}${nr?` mit Ziel ca. ${nr.kcal} kcal und ${nr.protein} g Eiweiß pro Tag`:""}. Mach das folgende Rezept cut-tauglicher, ohne dass es seinen Charakter verliert. Eiweiß soll gleich bleiben oder steigen.
 
 Rezept: ${r.name} (${r.servings} Portionen, gesamt ${r.kcal} kcal, ${r.p} g E, ${r.c} g KH, ${r.f} g F; pro Portion ${perP(r,"kcal")} kcal)
 Zutaten (ganzes Rezept):

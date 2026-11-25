@@ -451,6 +451,11 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .start-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:var(--accent);color:#fff;font-weight:700;font-size:19px;border-radius:18px;padding:17px 24px;margin:22px 0 24px}
 .start-btn svg{width:22px;height:22px}
 .ex-list{background:var(--surface);border-radius:var(--r-lg);padding:4px 0}
+.alt-sw{display:flex;gap:4px;background:var(--tile);border-radius:12px;padding:3px;margin:0 0 8px;max-width:100%}
+.alt-sw span{flex:1;min-width:0;text-align:center;padding:8px 10px;border-radius:9px;font-size:14px;font-weight:650;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.alt-sw span.on{background:var(--accent);color:#fff}
+.alt-sw.sm{margin:0 0 6px}.alt-sw.sm span{padding:6px 8px;font-size:13px}
+.ed-alt{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:14px;color:var(--muted)}.ed-alt b{color:var(--ink);font-weight:650;flex:1;min-width:0}.ed-alt button{color:var(--bad);font-size:18px;padding:2px 6px}
 .ex-row{display:flex;align-items:center;gap:14px;padding:11px 16px;width:100%;text-align:left}
 .ex-row + .ex-row{border-top:1px solid var(--line)}
 .ex-row.cur{box-shadow:inset 0 0 0 2px var(--accent);border-radius:16px;border-top-color:transparent}
@@ -1750,6 +1755,11 @@ function persist(){ if(S.active) S.active.updated = Date.now(); saveLocal(); que
 /* ================= Helpers ================= */
 const $ = id => document.getElementById(id);
 const W = id => PLAN.workouts.find(w=>w.id===id);
+/* Übung mit Alternative (z. B. Latzug Ober- oder Untergriff): im laufenden Training gilt die gewählte Variante */
+function altOf(e){ if(!e || !e.alt) return null; const d=exDef(e.alt); if(!d) return null;
+  const x={...d, sets:e.sets, reps:e.reps, rest:e.rest, slot:e.id, alt:null}; if(e.repsMax) x.repsMax=e.repsMax; else delete x.repsMax; return x; }
+function applyPick(w, pick){ if(!w || !pick) return w; let ch=false; const ex=w.exercises.map(e=>{ if(pick[e.id]){ const x=altOf(e); if(x){ ch=true; return x; } } return e; }); return ch?{...w, exercises:ex}:w; }
+function AW(a){ return a ? applyPick(W(a.workoutId), a.pick) : undefined; }
 const fmtTime = s => { s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), r=s%60; return m+":"+String(r).padStart(2,"0"); };
 const fmtDur = ms => { const m = Math.round(ms/60000); return m>=60 ? Math.floor(m/60)+" h"+(m%60?" "+(m%60)+" min":"") : m+" min"; };
 const num = v => { if(v===""||v==null) return null; const n = parseFloat(String(v).replace(",",".")); return isNaN(n)?null:n; };
@@ -1795,7 +1805,7 @@ function nameSync(){ const P={}; PLAN.workouts.forEach(w=>w.exercises.forEach(e=
 // Tabwechsel: neue Seite im selben Frame einblenden (vorher blitzte sie erst voll auf und blendete dann nochmal ein)
 function renderHome(){ renderHomeInner(); if(renderHome._anim){ renderHome._anim=false; const c=$("home").firstElementChild; if(c){ c.classList.remove("v-in"); void c.offsetWidth; c.classList.add("v-in"); } } }
 // Laufendes Training eines gelöschten Splits verwerfen – sonst stürzt die App beim Antippen ab
-function activeOrphanFix(){ if(!S.active || !CLOUD_LOADED || typeof W!=="function" || W(S.active.workoutId)) return false;
+function activeOrphanFix(){ if(!S.active || !CLOUD_LOADED || typeof W!=="function" || AW(S.active)) return false;
   S.active=null; persist(); try{ document.body.classList.toggle("has-resume", false); }catch(_){} try{ renderResume(); }catch(_){} try{ updateFab(); }catch(_){} return true; }
 function renderHomeInner(){ try{ nameSync(); }catch(_){} try{ activeOrphanFix(); }catch(_){}
   const el = $("home");
@@ -1803,7 +1813,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){} try{ activeOrphanFix();
   if(view!==renderHome.last){ renderHome.last=view; renderHome._anim=true; }
   document.body.classList.toggle("noscroll", UI.tab==="train");
   { const g=document.querySelector(".gear"); if(g) g.style.display = ""; document.body.classList.add("gear-on"); }
-  document.body.classList.toggle("has-resume", !!(S.active && W(S.active.workoutId)));
+  document.body.classList.toggle("has-resume", !!(S.active && AW(S.active)));
   const needSetup = S.mode==="pending" || (S.mode==="user" && !S.setupDone && !S.history.length);
   document.body.classList.toggle("ob-mode", needSetup);
   if(needSetup){ el.innerHTML = renderOnboarding(); renderTabbar(); return; }
@@ -1925,7 +1935,7 @@ function etaFactor(){
   etaFactor.c = R.length>=3 ? R[Math.floor(R.length/2)] : 1; etaFactor.n=S.history.length; return etaFactor.c;
 }
 function etaText(){
-  const a=S.active; if(!a) return ""; const w=W(a.workoutId); if(!w) return "";
+  const a=S.active; if(!a) return ""; const w=AW(a); if(!w) return "";
   let sec=0, open=0;
   w.exercises.forEach(e=>{ const x=a.ex[e.id]; if(!x) return; const r=e.rest||S.settings.rest;
     (x.wu||[]).forEach(s=>{ if(!s.done){ sec+=45+90; open++; } });
@@ -1965,7 +1975,7 @@ addEventListener("resize", ()=>setTimeout(tbH,50));
 function renderResume(){
   tbH();
   const r = $("resume");
-  const w = S.active ? W(S.active.workoutId) : null;
+  const w = S.active ? AW(S.active) : null;
   if(S.active && !w){ try{ activeOrphanFix(); }catch(_){} }   // Training ohne (geladenen) Split: keine leere Leiste zeigen
   if(S.active && w && !UI.workoutOpen){
     const {done,total} = progressOf(S.active);
@@ -2196,7 +2206,7 @@ function renderPreview(){
       <div class="pv-meta">${PLAN.name}, Woche ${weekNo()}<br>${w.exercises.length} Übungen, ${totalSets(w)} Sätze</div>
       <div class="muscles">${muscles.map(m=>`<span class="mtag"><i style="background:${MUSCLE_COLOR[m]}"></i>${m}</span>`).join("")}</div>
       <button class="start-btn" data-act="start" data-w="${w.id}">${isActiveSame?"Fortsetzen":"Starten"}</button>
-      ${isActiveOther? `<div class="note" style="margin:-8px 0 16px">Hinweis: ${W(S.active.workoutId).name} läuft noch – Starten verwirft es.</div>`:""}
+      ${isActiveOther? `<div class="note" style="margin:-8px 0 16px">Hinweis: ${AW(S.active).name} läuft noch – Starten verwirft es.</div>`:""}
       <div class="ex-list">
         ${w.exercises.map(e=>`<div class="ex-row" data-drag="${w.id}" data-id="${e.id}">${thumb(e)}<div><div class="ex-name">${e.name}</div><div class="ex-meta"><span>${e.sets} × ${repTxt(e)}</span><span>${e.equip}</span></div></div></div>`).join("")}
       </div>
@@ -2206,22 +2216,50 @@ function openPreview(wid){ UI.preview=wid; renderPreview(); $("preview").classLi
 function closePreview(){ if(UI.edit){ UI.edit=null; } $("preview").classList.remove("open"); $("scrim1").classList.remove("open"); }
 
 /* ================= Session ================= */
-function newSession(w){
+function exInit(e, r){
+  const last = lastFor(e.id);
+  const lastSets = last ? last.e.sets.filter(s=>!s.warm) : [];
+  return { warm:null, sets: Array.from({length:e.sets},(_,i)=>{
+    const p = lastSets[i] || lastSets[lastSets.length-1];
+    // empfohlenes Gewicht immer vorausfüllen, Wdh = Ziel – nur noch Wdh anpassen
+    if(r && r.kg!=null) return { kg:r.kg, reps:e.reps, done:false, kgAuto:true };
+    return { kg: p? p.kg : null, reps: p? p.reps : null, done:false };
+  })};
+}
+function newSession(w0){
+  // Übungen mit Alternative: die zuletzt trainierte Variante vorauswählen
+  const pick={}; w0.exercises.forEach(e=>{ if(e.alt && exDef(e.alt)){ const la=lastFor(e.alt), lp=lastFor(e.id); if(la && (!lp || la.h.start>lp.h.start)) pick[e.id]=1; } });
+  const w=applyPick(w0, pick);
   const ex = {};
   const base = buildBaseline(w);
-  w.exercises.forEach(e=>{
-    const last = lastFor(e.id);
-    const lastSets = last ? last.e.sets.filter(s=>!s.warm) : [];
-    const r = base[e.id];
-    ex[e.id] = { warm:null, sets: Array.from({length:e.sets},(_,i)=>{
-      const p = lastSets[i] || lastSets[lastSets.length-1];
-      // empfohlenes Gewicht immer vorausfüllen, Wdh = Ziel – nur noch Wdh anpassen
-      if(r && r.kg!=null) return { kg:r.kg, reps:e.reps, done:false, kgAuto:true };
-      return { kg: p? p.kg : null, reps: p? p.reps : null, done:false };
-    })};
-  });
+  w.exercises.forEach(e=>{ ex[e.id] = exInit(e, base[e.id]); });
   addWarmups(w, ex);
-  return { workoutId:w.id, start:Date.now(), prefilled:true, ex, base, ai:null, restEnd:null, restTotal:S.settings.rest, updated:Date.now() };
+  return { workoutId:w.id, start:Date.now(), prefilled:true, ex, base, pick, ai:null, restEnd:null, restTotal:S.settings.rest, updated:Date.now() };
+}
+/* Variante wechseln (nur solange in dieser Übung noch kein Satz erledigt ist) */
+function pickSlot(slot, useAlt){
+  const a=S.active; if(!a) return; const pw=W(a.workoutId); const pe=pw && pw.exercises.find(e=>e.id===slot); if(!pe || !pe.alt) return;
+  const cur=AW(a).exercises.find(e=>(e.slot||e.id)===slot); const cx=cur && a.ex[cur.id];
+  if(cx && cx.sets.some(s=>s.done)){ toast("Schon begonnen – Wechsel nicht mehr möglich"); return; }
+  if(!!(a.pick&&a.pick[slot])===!!useAlt) return;
+  a.pick=a.pick||{}; if(useAlt) a.pick[slot]=1; else delete a.pick[slot];
+  const ne=AW(a).exercises.find(e=>(e.slot||e.id)===slot);
+  a.base=a.base||{}; if(!a.base[ne.id]) a.base[ne.id]=nextRec(ne);
+  if(!a.ex[ne.id] || a.ex[ne.id].sets.length!==ne.sets) a.ex[ne.id]=exInit(ne, a.base[ne.id]);
+  // Aufwärmsatz mitnehmen, falls die Übung einen hatte
+  if(cx && cx.wu && !a.ex[ne.id].wu){ const r=a.base[ne.id]; const kg=r&&r.kg!=null?r.kg:null; if(kg) a.ex[ne.id].wu=wuSets(ne, kg); }
+  if(UI.ex===cur.id) UI.ex=ne.id; if(UI.lastEx===cur.id) UI.lastEx=ne.id;
+  persist(); if(UI.ex) renderEx(); if(UI.workoutOpen) renderWorkout(); updateFab(); renderResume();
+}
+// Kurzname: was die beiden Varianten unterscheidet (z. B. „Obergriff“ / „Untergriff“)
+function altLabels(a, b){ const wa=a.name.split(/\s+/), wb=b.name.split(/\s+/); const da=wa.filter(x=>!wb.includes(x)), db=wb.filter(x=>!wa.includes(x));
+  // kürzester eindeutiger Unterschied: das letzte abweichende Wort (z. B. „Obergriff“ / „Untergriff“)
+  return [da.length?da[da.length-1]:a.name, db.length?db[db.length-1]:b.name]; }
+function altSwitch(slot, chosenId, small){
+  const a=S.active; const pw=a && W(a.workoutId); const pe=pw && pw.exercises.find(e=>e.id===slot); const ae=pe && altOf(pe); if(!ae) return "";
+  const cx=a.ex[chosenId]; if(cx && cx.sets.some(s=>s.done)) return "";
+  const [la,lb]=altLabels(pe, ae); const onAlt=!!(a.pick&&a.pick[slot]);
+  return `<span class="alt-sw${small?" sm":""}"><span data-act="pickSlot" data-slot="${slot}" data-alt="0" class="${onAlt?"":"on"}">${esc(la)}</span><span data-act="pickSlot" data-slot="${slot}" data-alt="1" class="${onAlt?"on":""}">${esc(lb)}</span></span>`;
 }
 
 /* ================= Aufwärmsatz =================
@@ -2233,7 +2271,7 @@ const LEG_MUSCLES=["Quadrizeps","Beinbeuger","Gesäß","Waden","Adduktoren","Abd
 function isLegEx(e){ const m=EX_MUSCLES[e.id]||{}; const prim=Object.keys(m).sort((a,b)=>m[b]-m[a])[0]||e.muscle; return LEG_MUSCLES.includes(prim) || LEG_MUSCLES.includes(e.muscle); }
 // Laufendes Training von vor dieser Funktion: fehlende Aufwärmsätze nachtragen (nur bei Übungen ohne erledigten Satz)
 function ensureWarmups(){
-  const a=S.active; if(!a || a.wuChecked) return; const w=W(a.workoutId); if(!w) return;
+  const a=S.active; if(!a || a.wuChecked) return; const w=AW(a); if(!w) return;
   const ex={}; for(const k in a.ex) ex[k]={sets:a.ex[k].sets};
   addWarmups(w, ex); let ch=false;
   for(const k in ex){ const x=a.ex[k]; if(ex[k].wu && x.wu===undefined && !x.sets.some(s=>s.done)){ x.wu=ex[k].wu; ch=true; } }
@@ -2268,7 +2306,7 @@ function nextOpen(w, fromId){
   return order.find(o=>!isFin(o.id) && !isBlocked(o.id)) || order.find(o=>!isFin(o.id));
 }
 function altFor(blockedId){
-  const w=W(S.active.workoutId); const last=UI.lastEx && isFin(UI.lastEx) ? UI.lastEx : null;
+  const w=AW(S.active); const last=UI.lastEx && isFin(UI.lastEx) ? UI.lastEx : null;
   // offen = noch nicht alle Sätze erledigt; früher als belegt markierte Übungen bleiben wählbar (kommen nur weiter hinten)
   const c=w.exercises.filter(o=>o.id!==blockedId && !isFin(o.id))
     .map((o,idx)=>({o, ov:exOverlap(blockedId,o.id), ovLast: last? exOverlap(last,o.id):0, idx, bl:isBlocked(o.id)?1:0}));
@@ -2277,7 +2315,7 @@ function altFor(blockedId){
 }
 function blockEx(id){
   const a=S.active; if(!a) return; a.blocked=a.blocked||{}; a.blocked[id]=Date.now(); persist();
-  const w=W(a.workoutId), e=w.exercises.find(o=>o.id===id); const c=altFor(id);
+  const w=AW(a), e=w.exercises.find(o=>o.id===id); const c=altFor(id);
   const prim=x=>{ const m=EX_MUSCLES[x]||{}; return Object.keys(m).sort((p,q)=>m[q]-m[p]); };
   if(!c.length){ modal(`<h3>${esc(e.name)} ist belegt</h3><p>Es gibt keine andere offene Übung mehr. Warte kurz, bis das Gerät frei wird – die Übung bleibt offen.</p>`); renderAfterBlock(); return; }
   const best=c[0]; const bm=prim(id), cm=prim(best.o.id);
@@ -2293,7 +2331,7 @@ function blockEx(id){
 }
 function renderAfterBlock(){ if(UI.ex) renderEx(); else renderWorkout(); updateFab(); }
 // nur Übungen, die aktuell im Plan dieses Trainings stehen (alte Einträge nach Planänderung zählen nicht)
-function planEx(a){ const w=W(a.workoutId); return w ? w.exercises.map(e=>a.ex[e.id]).filter(Boolean) : Object.values(a.ex); }
+function planEx(a){ const w=AW(a); return w ? w.exercises.map(e=>a.ex[e.id]).filter(Boolean) : Object.values(a.ex); }
 function allSetsDone(a){ const l=planEx(a); return l.length>0 && l.every(y=>y.sets.every(z=>z.done)); }
 function progressOf(a){
   let done=0,total=0; planEx(a).forEach(x=>{ x.sets.forEach(s=>{ if(s.skip) return; total++; if(s.done) done++; }); });
@@ -2335,7 +2373,7 @@ document.addEventListener("focusout", ev=>{ if(ev.target.dataset && ev.target.da
 function renderWorkout(){ keepScroll("workout", _renderWorkout); }
 function _renderWorkout(){
   const a = S.active; if(!a) return;
-  const w = W(a.workoutId);
+  const w = AW(a);
   const {done,total} = progressOf(a);
   $("workout").innerHTML = `
     <div class="aw-head"><button class="link" data-act="minimize">‹ Übersicht</button><span class="aw-time" data-elapsed></span><span style="min-width:90px"></span></div>
@@ -2349,7 +2387,7 @@ function _renderWorkout(){
         const cur=(le&&prog(le))?le.id:(w.exercises.find(prog)||{}).id; return w.exercises.map(e=>{
         const x = a.ex[e.id]; const d = x.sets.filter(s=>s.done).length; const fin = d===x.sets.length;
         return `<button class="ex-row ${fin?"done":""} ${e.id===cur?"cur":""}" data-act="openEx" data-ex="${e.id}" data-drag="${w.id}" data-id="${e.id}">${thumb(e)}
-          <div style="min-width:0"><div class="ex-name">${e.name}</div><div class="ex-meta"><span>${x.sets.length} × ${repTxt(e)}</span><span>${e.equip}</span></div>${fin?"":recChip(e.id)}${!fin&&isBlocked(e.id)?`<span class="rchip down" style="margin-left:4px">Belegt</span>`:""}</div>
+          <div style="min-width:0">${altSwitch(e.slot||e.id, e.id, true)}<div class="ex-name">${e.name}</div><div class="ex-meta"><span>${x.sets.length} × ${repTxt(e)}</span><span>${e.equip}</span></div>${fin?"":recChip(e.id)}${!fin&&isBlocked(e.id)?`<span class="rchip down" style="margin-left:4px">Belegt</span>`:""}</div>
           <span class="status">${fin? `<span class="ok-ic">${IC.check}</span>` : `<span class="setdots" aria-label="${d} von ${x.sets.length} Sätzen erledigt">${x.sets.map(s=>`<i class="${s.done?"on":""}"></i>`).join("")}</span><span class="setcnt">${d}/${x.sets.length}</span>`}</span></button>`;
       }).join(""); })()}
       </div>
@@ -2362,7 +2400,7 @@ function _renderWorkout(){
 
 /* Fortsetzen: direkt in die aktuelle Übung mit offenen Sätzen */
 function resumeWorkout(){
-  openWorkout(); const a=S.active; if(!a) return; const w=W(a.workoutId); if(!w) return;
+  openWorkout(); const a=S.active; if(!a) return; const w=AW(a); if(!w) return;
   const open=e=>{ const x=a.ex[e.id]; return x && x.sets.some(s=>!s.done); };
   const last=w.exercises.find(e=>e.id===(UI.lastEx||a.lastEx));
   const target = (last && open(last)) ? last
@@ -2396,7 +2434,7 @@ function renderEx(){ keepScroll("exsheet", _renderEx); rcMark(); }
 function rcMark(){ document.querySelectorAll(".rc-why").forEach(el=>{ if(!el.classList.contains("open")) el.classList.toggle("more", el.scrollHeight>el.clientHeight+2); }); }
 function _renderEx(){
   const a = S.active; const exId = UI.ex; if(!a||!exId) return;
-  const w = W(a.workoutId); const e = w.exercises.find(x=>x.id===exId); const x = a.ex[exId];
+  const w = AW(a); const e = w.exercises.find(x=>x.id===exId); const x = a.ex[exId];
   const ai = activeIdx(x);
   const last = lastFor(exId);
   const idx = w.exercises.indexOf(e); const nextEx = w.exercises[idx+1];
@@ -2416,6 +2454,7 @@ function _renderEx(){
       <div class="strip">${w.exercises.map(o=>{
         const ox=a.ex[o.id]; const fin = ox.sets.every(s=>s.done);
         return `<button class="strip-b" data-act="openEx" data-ex="${o.id}">${thumb(o, (o.id===exId?"cur ":"")+(fin?"fin":""))}<span class="setdots sm">${ox.sets.map(s=>`<i class="${s.done?"on":""}"></i>`).join("")}</span></button>`;}).join("")}</div>
+      ${altSwitch(e.slot||e.id, e.id, false)}
       <div class="ex-h"><h2>${e.name}</h2></div>
       <div class="ex-sub"><span>${e.equip}</span><span>${repTxt(e)} Wdh</span><span>Pause ${fmtTime(e.rest||S.settings.rest)}</span><span>${e.muscle}</span></div>
       ${isBlocked(e.id) ? `<button class="block-wide" data-act="blockEx" data-ex="${e.id}">Gerät belegt – andere Übung vorschlagen</button>` : ""}
@@ -2582,7 +2621,7 @@ function nextRec(e){ const lk=planLock(e); if(lk) return lk; const r=baselineRec
 function planLock(e){ if(!e || !e.reset || e.reset.kg==null) return null; const l=lastNFor(e.id,1)[0];
   if(l && l.date >= new Date(e.reset.from+"T00:00:00").getTime()) return null;
   return {action:e.reset.action||"down", kg:snapW(e, e.reset.kg), reason:e.reset.why||"Geplante Umstellung", src:"plan"}; }
-function lockSync(){ const a=S.active; if(!a) return; const w=W(a.workoutId); if(!w) return; let ch=false;
+function lockSync(){ const a=S.active; if(!a) return; const w=AW(a); if(!w) return; let ch=false;
   w.exercises.forEach(e=>{ const b=a.base&&a.base[e.id]; const lk=planLock(e) || (b && b.kg!=null && !b.unclear && a.ai && a.ai.status==="done" ? {action:b.action, kg:b.kg, reason:b.reason} : null); const x=a.ex[e.id]; if(!lk||!x) return;
     if(a.ai && a.ai.items && a.ai.items[e.id] && a.ai.items[e.id].kg!==lk.kg){ a.ai.items[e.id]={action:lk.action, kg:lk.kg, reason:lk.reason}; ch=true; }
     x.sets.forEach(s=>{ if(!s.done && !s.edited && s.kgAuto!==false && num(s.kg)!==lk.kg){ s.kg=lk.kg; s.kgAuto=true; ch=true; } }); });
@@ -2595,9 +2634,9 @@ function lockSync(){ const a=S.active; if(!a) return; const w=W(a.workoutId); if
   if(ch) persist(); }
 function recFor(exId){
   const a=S.active; if(!a) return null;
-  const lockE=(W(a.workoutId)||{exercises:[]}).exercises.find(x=>x.id===exId); const lock=planLock(lockE); if(lock) return lock;
+  const lockE=(AW(a)||{exercises:[]}).exercises.find(x=>x.id===exId); const lock=planLock(lockE); if(lock) return lock;
   const ai = a.ai && a.ai.items && a.ai.items[exId];
-  if(ai && ai.kg!=null){ const e=(W(a.workoutId)||{exercises:[]}).exercises.find(x=>x.id===exId); if(e && stackOf(e)) return {...ai, kg:snapW(e, ai.kg), src:"claude"}; }
+  if(ai && ai.kg!=null){ const e=(AW(a)||{exercises:[]}).exercises.find(x=>x.id===exId); if(e && stackOf(e)) return {...ai, kg:snapW(e, ai.kg), src:"claude"}; }
   return ai ? {...ai, src:"claude"} : (a.base && a.base[exId] ? {...a.base[exId], src:"rule"} : null);
 }
 const REC_LABEL = {up:"Steigern", hold:"Halten", down:"Senken", new:"Neu"};
@@ -2607,7 +2646,7 @@ let SAMPLE=null;
 async function getSample(){ try{ if(!(window.claude&&window.claude.use)) return null; SAMPLE = SAMPLE || await claude.use("sample"); return SAMPLE; }catch(e){ return null; } }
 async function analyzeWithClaude(){
   const a = S.active; if(!a) return;
-  const w = W(a.workoutId);
+  const w = AW(a);
   // Kosten sparen: Übungen, für die seit der letzten Claude-Analyse kein neues Training dazukam, nicht erneut schicken
   // Übungen mit klarer Regel (oder geplanter Umstellung) braucht Claude nicht – dort gilt ohnehin die Regel
   const fxOf = e => { const b=a.base[e.id]; return planLock(e) || (b && (b.src==="claude" || !b.unclear) ? b : null); };
@@ -2745,7 +2784,7 @@ function beep(){
     });
   }catch(e){}
 }
-function curEx(){ const a=S.active; if(!a) return null; const w=W(a.workoutId); if(!w) return null; const id=UI.ex||UI.lastEx||a.lastEx; return w.exercises.find(e=>e.id===id)||null; }
+function curEx(){ const a=S.active; if(!a) return null; const w=AW(a); if(!w) return null; const id=UI.ex||UI.lastEx||a.lastEx; return w.exercises.find(e=>e.id===id)||null; }
 function curRest(){ const e=curEx(); return (e && e.rest) || S.settings.rest; }
 function setExRest(id, sec){
   S.settings.plan=S.settings.plan||{};
@@ -2779,7 +2818,7 @@ function updateFab(){
   // Weiter-Button im Dock, sobald alle Sätze der Übung erledigt sind
   let nextHtml="";
   if(show && UI.ex){
-    const w=W(S.active.workoutId), x=S.active.ex[UI.ex];
+    const w=AW(S.active), x=S.active.ex[UI.ex];
     if(x && x.sets.every(s=>s.done)){
       const rest = nextOpen(w, UI.ex);
       nextHtml = rest ? `<div class="next-row"><button class="next-btn" data-act="openEx" data-ex="${rest.id}">Weiter: ${rest.name}</button><button class="block-btn" data-act="blockEx" data-ex="${rest.id}">Belegt</button></div>` : "";
@@ -2823,7 +2862,7 @@ function restDoneFlash(){
   // Übung fertig und unten steht schon „Weiter: nächste Übung“ → kein zweiter Hinweis, nur diesen Button hervorheben
   const nb = UI.workoutOpen && UI.ex ? document.querySelector("#dockNext .next-btn") : null;
   if(nb){ stopRest(); const b=document.querySelector("#dockNext .next-btn"); if(b){ b.classList.remove("rd-pulse"); void b.offsetWidth; b.classList.add("rd-pulse"); } return; }
-  const w=W(a.workoutId); let sub="Nächster Satz"; rdTarget=null;
+  const w=AW(a); let sub="Nächster Satz"; rdTarget=null;
   const id = UI.ex || UI.lastEx; const x = id && a.ex[id]; const e = id && w.exercises.find(o=>o.id===id);
   if(x && e){
     const i=x.sets.findIndex(s=>!s.done);
@@ -2869,7 +2908,7 @@ document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) tick();
 
 /* ================= Bewertung ================= */
 function scoreSession(a){
-  const w = W(a.workoutId);
+  const w = AW(a);
   let planned=0, done=0, qSum=0, qN=0, pSum=0, pN=0;
   const perEx=[];
   w.exercises.forEach(e=>{
@@ -3184,7 +3223,7 @@ function renderExerciseCharts(){
 }
 /* Schnellaktionen für eine Übung im laufenden Training */
 function exMenu(id){
-  const a=S.active; if(!a) return; const w=W(a.workoutId), e=w&&w.exercises.find(x=>x.id===id), x=a.ex[id]; if(!e||!x) return;
+  const a=S.active; if(!a) return; const w=AW(a), e=w&&w.exercises.find(x=>x.id===id), x=a.ex[id]; if(!e||!x) return;
   const started=x.sets.some(s=>s.done), hasHist=lastNFor(id,1).length>0, r=e.rest||S.settings.rest;
   const IC2=(d)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   modal(`<div class="xm-h">${thumb(e)}<div><b>${esc(e.name)}</b><span>${x.sets.length} Sätze · Ziel ${repTxt(e)} Wdh · Pause ${fmtTime(r)}</span></div></div>
@@ -3320,7 +3359,7 @@ function wDel(wid){
 }
 function editStart(wid){
   const w=W(wid);
-  UI.edit={wid, list:w.exercises.map(e=>({id:e.id, sets:e.sets, reps:e.reps, repsMax:e.repsMax||null, rest:e.rest||S.settings.rest}))};
+  UI.edit={wid, list:w.exercises.map(e=>({id:e.id, sets:e.sets, reps:e.reps, repsMax:e.repsMax||null, rest:e.rest||S.settings.rest, ...(e.alt?{alt:e.alt}:{})}))};
   renderPreview();
 }
 function editSave(){
@@ -3329,7 +3368,7 @@ function editSave(){
   S.settings.order=S.settings.order||{}; S.settings.order[wid]=list.map(x=>x.id);
   try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
   buildPlan(); applyOrder(); saveLocal(); saveSettingsRemote();
-  if(S.active && S.active.workoutId===wid){ const w=W(wid); w.exercises.forEach(e=>{ if(!S.active.ex[e.id]) S.active.ex[e.id]={warm:null,sets:Array.from({length:e.sets},()=>({kg:null,reps:null,done:false}))}; if(!S.active.base[e.id]) S.active.base[e.id]=baselineRec(e); }); persist(); }
+  if(S.active && S.active.workoutId===wid){ const w=AW(S.active); w.exercises.forEach(e=>{ if(!S.active.ex[e.id]) S.active.ex[e.id]={warm:null,sets:Array.from({length:e.sets},()=>({kg:null,reps:null,done:false}))}; if(!S.active.base[e.id]) S.active.base[e.id]=baselineRec(e); }); persist(); }
   UI.edit=null; renderPreview(); renderHome(); toast("Plan gespeichert");
 }
 function editRows(){
@@ -3346,19 +3385,23 @@ function editRows(){
         <div class="ed-c"><span>Pause</span><div><button class="ed-rest" data-act="edRest" data-i="${i}">${fmtTime(x.rest)}</button></div></div>
       </div>
       <button class="ed-range ${x.repsMax?"on":""}" data-act="edRange" data-i="${i}">${x.repsMax?"Wdh-Bereich ("+x.reps+"–"+x.repsMax+") aus":"Als Wdh-Bereich (z. B. 12–15)"}</button>
+      ${x.alt && exDef(x.alt) ? `<div class="ed-alt"><span>Alternative:</span><b>${esc(exDef(x.alt).name)}</b><button data-act="edAltDel" data-i="${i}" aria-label="Alternative entfernen">×</button></div>`
+        : `<button class="ed-range" data-act="edAltOpen" data-i="${i}">+ Alternative hinzufügen</button>`}
     </div>`; }).join("");
 }
-function editAddModal(){
-  const inPlan=new Set(UI.edit.list.map(x=>x.id));
+function editAddModal(altFor){
+  UI.edAltFor = altFor==null ? null : altFor;
+  const inPlan=new Set(altFor==null ? UI.edit.list.map(x=>x.id) : [UI.edit.list[altFor].id]);
   const all={...BASE_EX, ...(S.settings.customEx||{})};
   const opts=Object.values(all).filter(e=>!inPlan.has(e.id)).sort((a,b)=>a.name.localeCompare(b.name,"de"));
   const en=id=>{ const x=LIB.find(l=>l.id===id); return x&&x.en?x.en:""; };
-  modal(`<h3>Übung hinzufügen</h3>
+  modal(`<h3>${altFor==null?"Übung hinzufügen":"Alternative zu „"+esc((exDef(UI.edit.list[altFor].id)||{}).name||"")+"“"}</h3>
+    ${altFor==null?"":`<p style="margin:-2px 0 10px">Beim Trainingsstart wählst du, welche der beiden Übungen du machst.</p>`}
     <div class="ed-search"><input id="edQ" type="search" placeholder="Übung suchen, z. B. Rudern" autocomplete="off"></div>
     <div class="vd-list" id="edList">${opts.map(e=>`<button class="vd-row ed-pick" data-act="edAdd" data-id="${e.id}" data-q="${esc((e.name+" "+(e.equip||"")+" "+(e.muscle||"")+" "+en(e.id)).toLowerCase())}"><div style="text-align:left"><b>${esc(e.name)}</b><span>${esc(e.equip)} · ${esc(e.muscle||"")}</span></div><em style="font-size:22px;color:var(--accent)">+</em></button>`).join("")}</div>
     <p class="nu-hint" id="edNone" style="display:none;margin:6px 0 12px">Keine Übung gefunden – lege sie unten als eigene Übung an.</p>
-    <div class="vd-sub">Eigene Übung</div>
-    ${newExForm("newEx")}
+    ${altFor==null?`<div class="vd-sub">Eigene Übung</div>
+    ${newExForm("newEx")}`:""}
     <button class="m-btn" data-act="closeModal">Abbrechen</button>`);
   setTimeout(()=>nePreview(false),60);
 }
@@ -3494,7 +3537,7 @@ function stagApply(id){
   if(a.kg!=null){ S.settings.resets=S.settings.resets||{}; S.settings.resets[id]={kg:a.kg, action:"hold", from:todayKey(), why:`Neue Strategie „${pl.title}“: ${pl.text}`.slice(0,300)}; }
   try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
   buildPlan(); applyOrder();
-  if(S.active){ const e2=W(S.active.workoutId) && W(S.active.workoutId).exercises.find(e=>e.id===id), lk=planLock(e2), x=S.active.ex[id];
+  if(S.active){ const e2=AW(S.active) && AW(S.active).exercises.find(e=>e.id===id), lk=planLock(e2), x=S.active.ex[id];
     if(lk && x){ if(S.active.ai && S.active.ai.items) S.active.ai.items[id]={action:lk.action, kg:lk.kg, reason:lk.reason}; x.sets.forEach(s=>{ if(!s.done && !s.edited && s.kgAuto!==false){ s.kg=lk.kg; s.kgAuto=true; } }); persist(); } }
   saveLocal(); saveSettingsRemote();
   toast(`${ex.name}: Strategie übernommen`); closeModal(); keepScrollHome(renderHome);
@@ -5800,7 +5843,7 @@ function finishAsk(){
     <button class="m-btn" data-act="closeModal">Weiter trainieren</button>`);
 }
 function finish(){
-  const a=S.active; const w=W(a.workoutId);
+  const a=S.active; const w=AW(a);
   const sc = scoreSession(a);
   const h = { id: String(a.start), workoutId:w.id, name:w.name, start:a.start, end:Date.now(), score: sc,
     exercises: w.exercises.map(e=>{ const x=a.ex[e.id]; const sets=[];
@@ -5967,7 +6010,7 @@ document.addEventListener("click", ev=>{
       if(!s.done && i!==ai) break;
       if(s.done && i!==lastDone) break;
       if(s.done && Date.now()-(UI.ckT||0)<800) break;   // versehentlicher Doppeltipp: nicht gleich "Rückgängig?" fragen
-      const e = W(a.workoutId).exercises.find(o=>o.id===UI.ex);
+      const e = AW(a).exercises.find(o=>o.id===UI.ex);
       if(!s.done){
         if(s.reps==null || s.reps==="") s.reps = e.reps;           // Ziel-Wdh übernehmen, falls leer
         if(s.kg==null || s.kg==="") s.kg = e.equip==="Körpergewicht"?0:null;
@@ -6028,6 +6071,7 @@ document.addEventListener("click", ev=>{
     case "wNewFromLib": UI.wAfterAdd=b.dataset.id; wEditModal(null); break;
     case "libDelEx": { const id=b.dataset.id; if(S.settings.customEx) delete S.settings.customEx[id]; try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} saveLocal(); saveSettingsRemote(); closeModal(); renderHome(); toast("Übung gelöscht"); break; }
     case "libAdd": libAdd(b.dataset.id, b.dataset.w); break;
+    case "pickSlot": pickSlot(b.dataset.slot, b.dataset.alt==="1"); break;
     case "edStart": editStart(b.dataset.w); break;
     case "edCancel": UI.edit=null; renderPreview(); break;
     case "edSave": editSave(); break;
@@ -6040,10 +6084,14 @@ document.addEventListener("click", ev=>{
     case "edRest": { const x=UI.edit.list[+b.dataset.i], opts=[60,90,120,150,180]; x.rest=opts[(opts.indexOf(x.rest)+1)%opts.length]; renderPreviewKeep(); break; }
     case "edRange": { const x=UI.edit.list[+b.dataset.i]; x.repsMax = x.repsMax? null : x.reps+3; renderPreviewKeep(); break; }
     case "edAddOpen": editAddModal(); break;
-    case "edAdd": { const d=exDef(b.dataset.id); UI.edit.list.push({id:d.id, sets:d.sets||3, reps:d.reps||10, repsMax:d.repsMax||null, rest:d.rest||120}); closeModal(); renderPreview(); setTimeout(()=>{ const sc=$("preview").querySelector(".sheet-scroll"); if(sc) sc.scrollTop=sc.scrollHeight; },50); break; }
+    case "edAltOpen": editAddModal(+b.dataset.i); break;
+    case "edAltDel": { const x=UI.edit.list[+b.dataset.i]; if(x) delete x.alt; renderPreviewKeep(); break; }
+    case "edAdd": { const d=exDef(b.dataset.id);
+      if(UI.edAltFor!=null){ const x=UI.edit.list[UI.edAltFor]; UI.edAltFor=null; if(x){ x.alt=d.id; } closeModal(); renderPreviewKeep(); break; }
+      UI.edit.list.push({id:d.id, sets:d.sets||3, reps:d.reps||10, repsMax:d.repsMax||null, rest:d.rest||120}); closeModal(); renderPreview(); setTimeout(()=>{ const sc=$("preview").querySelector(".sheet-scroll"); if(sc) sc.scrollTop=sc.scrollHeight; },50); break; }
     case "edReset": { if(S.settings.plan) delete S.settings.plan[UI.edit.wid]; if(S.settings.order) delete S.settings.order[UI.edit.wid]; saveLocal(); saveSettingsRemote(); buildPlan(); applyOrder(); UI.edit=null; renderPreview(); renderHome(); toast("Standardplan wiederhergestellt"); break; }
     case "step": {
-      const x=a.ex[UI.ex], i=+b.dataset.i, s=x.sets[i], e=W(a.workoutId).exercises.find(o=>o.id===UI.ex);
+      const x=a.ex[UI.ex], i=+b.dataset.i, s=x.sets[i], e=AW(a).exercises.find(o=>o.id===UI.ex);
       const d=parseFloat(b.dataset.d);
       if(b.dataset.f==="kg"){ const base = num(s.kg) ?? 0; s.kg = stackOf(e) ? snapStack(e, base, d>0?"up":"down", base) : Math.max(0, Math.round((base+d)*100)/100); }
       else { const base = num(s.reps) ?? e.reps; s.reps = Math.max(0, base+d); }
@@ -6281,7 +6329,7 @@ document.addEventListener("input", ev=>{
   const inp = ev.target; if(!inp.dataset.in || !S.active || !UI.ex) return;
   const x = S.active.ex[UI.ex]; const s = inp.dataset.warm? (x.wu||[])[+inp.dataset.i] : x.sets[+inp.dataset.i]; if(!s) return;
   if(inp.dataset.in==="kg"){ s.kg = num(inp.value); s.kgAuto=false; s.edited=true; } else s.reps = num(inp.value)==null?null:Math.round(num(inp.value));
-  const e = W(S.active.workoutId).exercises.find(o=>o.id===UI.ex);
+  const e = AW(S.active).exercises.find(o=>o.id===UI.ex);
   const rmEl = inp.parentElement.querySelector(".rm"); const rm = repMax(num(s.kg), num(s.reps), e.reps);
   if(rmEl && !inp.dataset.warm) rmEl.textContent = rm==null?"–":fmtNum(rm);
   persist();
@@ -6307,7 +6355,7 @@ function kpLabel(inp){
 function kpStep(inp, dir){
   const raw = inp.value!=="" ? inp.value : (inp.placeholder||""); let v=num(raw); if(v==null) v=0;
   let nv;
-  if(inp.dataset.in==="kg" && S.active && UI.ex){ const e=W(S.active.workoutId).exercises.find(o=>o.id===UI.ex);
+  if(inp.dataset.in==="kg" && S.active && UI.ex){ const e=AW(S.active).exercises.find(o=>o.id===UI.ex);
     nv = e && stackOf(e) ? snapStack(e, v, dir>0?"up":"down", v) : Math.max(0, Math.round((v+dir*(e?STEP(e):2.5))*100)/100); }
   else nv = Math.max(0, Math.round((v + dir*(inp.id==="bodyIn"?0.1:1))*10)/10);
   kpSet(inp, inp.dataset.kpmode==="numeric" ? String(Math.round(nv)) : fmtNum(nv));
@@ -6533,7 +6581,7 @@ function revertStag1(){
 }
 revertStag1();
 setTimeout(()=>{ if(S.mode==="pending"){ S.mode="user"; userModeCleanup(); buildPlan(); saveLocal(); renderAll(); } }, 9000);
-if(S.active){ const w0=W(S.active.workoutId); if(w0){ try{ w0.exercises.forEach(e=>{ if(!stackOf(e)) return; const it=S.active.ai&&S.active.ai.items&&S.active.ai.items[e.id]; if(it && it.kg!=null){ const k=snapW(e,it.kg); if(k!==it.kg){ it.reason=String(it.reason||'').replace(new RegExp(String(it.kg).replace('.',',')+' ?kg','g'), fmtNum(k)+' kg'); it.kg=k; } } const x=S.active.ex[e.id]; if(x) [...(x.sets||[]), ...(x.wu||[])].forEach(s=>{ if(!s.done && s.kgAuto!==false && num(s.kg)>0) s.kg=snapW(e, num(s.kg)); }); }); }catch(_){} if(!S.active.base) S.active.base = buildBaseline(w0); else w0.exercises.forEach(e=>{ if(!S.active.base[e.id]) S.active.base[e.id]=baselineRec(e); });
+if(S.active){ const w0=AW(S.active); if(w0){ try{ w0.exercises.forEach(e=>{ if(!stackOf(e)) return; const it=S.active.ai&&S.active.ai.items&&S.active.ai.items[e.id]; if(it && it.kg!=null){ const k=snapW(e,it.kg); if(k!==it.kg){ it.reason=String(it.reason||'').replace(new RegExp(String(it.kg).replace('.',',')+' ?kg','g'), fmtNum(k)+' kg'); it.kg=k; } } const x=S.active.ex[e.id]; if(x) [...(x.sets||[]), ...(x.wu||[])].forEach(s=>{ if(!s.done && s.kgAuto!==false && num(s.kg)>0) s.kg=snapW(e, num(s.kg)); }); }); }catch(_){} if(!S.active.base) S.active.base = buildBaseline(w0); else w0.exercises.forEach(e=>{ if(!S.active.base[e.id]) S.active.base[e.id]=baselineRec(e); });
   // Geplante Umstellungen haben Vorrang vor älteren Claude-Werten (einheitliche Empfehlung)
   w0.exercises.forEach(e=>{ const lk=planLock(e), x=S.active.ex[e.id]; if(!lk||!x) return;
     if(S.active.ai && S.active.ai.items && S.active.ai.items[e.id]) S.active.ai.items[e.id]={action:lk.action, kg:lk.kg, reason:lk.reason};

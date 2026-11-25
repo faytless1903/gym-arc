@@ -1093,6 +1093,7 @@ body.ob-mode .tabbar{display:none}
 .lib-new{margin:0 0 14px}
 .ne-top{display:flex;gap:10px;align-items:center}.ne-top .ex-thumb{flex-shrink:0}.ne-top input{flex:1;min-width:0}
 .co-mdl{display:block;margin-top:6px;font-size:11px;color:var(--faint)}
+.ed-search{position:sticky;top:0;z-index:2;background:var(--surface);padding:0 0 10px}.ed-search input{width:100%;height:46px;border:0;border-radius:14px;background:var(--tile);padding:0 16px;font-size:16px;color:var(--ink);outline:none;-webkit-appearance:none}
 .w-empty{background:var(--surface);border-radius:var(--r-lg);padding:18px;margin-bottom:12px}.w-empty b{display:block;font-size:17px;margin-bottom:4px}.w-empty span{color:var(--muted);font-size:14px;line-height:1.45}
 .wb-ini{font-weight:800;font-size:22px;color:#fff;letter-spacing:-.02em}
 .ob-opt{display:block;width:100%;text-align:left;background:var(--surface);border-radius:18px;padding:16px 18px;margin-bottom:10px}
@@ -3328,8 +3329,11 @@ function editAddModal(){
   const inPlan=new Set(UI.edit.list.map(x=>x.id));
   const all={...BASE_EX, ...(S.settings.customEx||{})};
   const opts=Object.values(all).filter(e=>!inPlan.has(e.id)).sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  const en=id=>{ const x=LIB.find(l=>l.id===id); return x&&x.en?x.en:""; };
   modal(`<h3>Übung hinzufügen</h3>
-    <div class="vd-list">${opts.map(e=>`<button class="vd-row ed-pick" data-act="edAdd" data-id="${e.id}"><div style="text-align:left"><b>${esc(e.name)}</b><span>${esc(e.equip)} · ${esc(e.muscle||"")}</span></div><em style="font-size:22px;color:var(--accent)">+</em></button>`).join("")}</div>
+    <div class="ed-search"><input id="edQ" type="search" placeholder="Übung suchen, z. B. Rudern" autocomplete="off"></div>
+    <div class="vd-list" id="edList">${opts.map(e=>`<button class="vd-row ed-pick" data-act="edAdd" data-id="${e.id}" data-q="${esc((e.name+" "+(e.equip||"")+" "+(e.muscle||"")+" "+en(e.id)).toLowerCase())}"><div style="text-align:left"><b>${esc(e.name)}</b><span>${esc(e.equip)} · ${esc(e.muscle||"")}</span></div><em style="font-size:22px;color:var(--accent)">+</em></button>`).join("")}</div>
+    <p class="nu-hint" id="edNone" style="display:none;margin:6px 0 12px">Keine Übung gefunden – lege sie unten als eigene Übung an.</p>
     <div class="vd-sub">Eigene Übung</div>
     ${newExForm("newEx")}
     <button class="m-btn" data-act="closeModal">Abbrechen</button>`);
@@ -5608,6 +5612,13 @@ function nePreview(fromName){
   const ht=$("neHint"); if(ht) ht.textContent = g&&g.like ? `Icon wie „${g.like}“ – Gerät und Muskel kannst du anpassen.` : name.trim().length>=3 ? "Kein passendes Icon gefunden – es richtet sich nach dem gewählten Muskel." : "Icon, Gerät und Muskel werden anhand des Namens vorgeschlagen.";
 }
 document.addEventListener("input", ev=>{ if(ev.target.id==="neName") nePreview(true); });
+// Suche im Fenster „Übung hinzufügen“: filtert ohne Neuaufbau (Tastatur bleibt offen)
+document.addEventListener("input", ev=>{ if(ev.target.id!=="edQ") return;
+  const words=ev.target.value.toLowerCase().trim().split(/\s+/).filter(Boolean); let n=0;
+  document.querySelectorAll("#edList .ed-pick").forEach(b=>{ const ok=words.every(w=>(b.dataset.q||"").includes(w)); b.style.display=ok?"":"none"; if(ok) n++; });
+  const none=$("edNone"); if(none) none.style.display = n ? "none" : "";
+  if(!n){ const ne=$("neName"); if(ne && ne.dataset.auto!=="0"){ const v=ev.target.value.trim(); ne.value=v.charAt(0).toUpperCase()+v.slice(1); nePreview(true); } } });
+document.addEventListener("input", ev=>{ if(ev.target.id==="neName" && ev.isTrusted) ev.target.dataset.auto="0"; });
 document.addEventListener("change", ev=>{ if(ev.target.id==="neMuscle"||ev.target.id==="neEquip") nePreview(false); });
 function makeCustomEx(){
   const name=($("neName")||{}).value.trim(); if(!name){ toast("Bitte einen Namen eingeben"); return null; }

@@ -873,7 +873,7 @@ html,body{overflow-x:clip}
 .modal.open .modal-box{transform:none;opacity:1}
 .modal-box.swap{animation:mSwap .2s ease}
 @keyframes mSwap{from{opacity:.35;transform:translateY(8px)}to{opacity:1;transform:none}}
-body.m-lock{overflow:hidden}
+body.m-lock{position:fixed;left:0;right:0;overflow:hidden}
 /* Tabs & Unterreiter: sanft einblenden statt hart umschalten */
 .v-in{animation:vIn .18s cubic-bezier(.2,.8,.2,1) both}
 @keyframes vIn{from{opacity:0}to{opacity:1}}
@@ -5745,12 +5745,15 @@ function libAdd(id, wid){
 }
 
 /* ================= Finish ================= */
+/* Hintergrund sperren, ohne dass die Seite nach oben springt: Position merken, Seite fixieren, beim Schließen zurück */
+function mLock(){ const b=document.body; if(b.classList.contains("m-lock")) return; const y=window.scrollY||0; b.dataset.ly=String(y); b.style.top=(-y)+"px"; b.classList.add("m-lock"); }
+function mUnlock(){ const b=document.body; if(!b.classList.contains("m-lock")) return; const y=+b.dataset.ly||0; b.classList.remove("m-lock"); b.style.top=""; delete b.dataset.ly; if(y) window.scrollTo(0,y); }
 function modal(html){ const M=$("modal"), B=$("modalbox"), wasOpen=M.classList.contains("open");
   if(wasOpen){ B.classList.remove("swap"); void B.offsetWidth; B.classList.add("swap"); }
-  document.body.classList.add("m-lock"); clearTimeout(modal.t);
+  mLock(); clearTimeout(modal.t);
   B.innerHTML=`<div class="m-top"><button class="m-x" data-act="closeModal" aria-label="Schließen"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>`+html; B.scrollTop=0; M.classList.add("open"); }
 function closeModal(){ const M=$("modal"); if(!M.classList.contains("open")) return; try{ if(KP.inp && M.contains(KP.inp)) kpHide(false); }catch(_){} M.classList.remove("open"); if(typeof nutriPendingRender!=="undefined" && nutriPendingRender) setTimeout(()=>{ if(nutriPendingRender) nutriRerender(); },350); $("modalbox").classList.remove("swap");
-  clearTimeout(modal.t); modal.t=setTimeout(()=>{ if(!M.classList.contains("open")) document.body.classList.remove("m-lock"); },280);
+  clearTimeout(modal.t); modal.t=setTimeout(()=>{ if(!M.classList.contains("open")) mUnlock(); },280);
   if(UI.tab==="nutrition" && UI.nuTab==="cook") setTimeout(()=>{ if(!M.classList.contains("open")) keepScrollHome(renderHome); },300); }
 function closeModalUser(){ UI.mealOpen=null; closeModal(); }
 function finishAsk(){

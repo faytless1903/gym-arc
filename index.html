@@ -1899,9 +1899,15 @@ function wColorOld(w){ const id=(w&&w.id||"")+"", n=((w&&w.name)||"").toLowerCas
   if(id==="pull"||n.includes("pull")) return "#0EA5A0";
   if(/bein|leg/.test(n)) return "#F97316";
   const P=["#8B5CF6","#E5484D","#0EA5A0","#F97316"]; let s=0; for(const c of id) s+=c.charCodeAt(0); return P[s%P.length]; }
-function wIcon(w){ const e=w&&w.exercises&&w.exercises[0]; if(!e) return `<span class="wb-ini">${esc(((w&&w.name)||"?").trim().slice(0,2))}</span>`;
-  const fd=FIG[e.id]||FIG[FIG_ALIAS[e.id]]; const t=e.id==="lz"?0:(fd&&fd.thumbT!=null?fd.thumbT:1);
-  return `<span class="wb-fig">${figSVG(e.id,t)}</span>`; }
+// Icon für jeden Split: Figur der ersten Übung mit Figur, sonst passend zum Namen (Push, Pull, Beine/Unterkörper …)
+const W_NAME_FIG=[[/push|brust|chest|drück/i,"bench"],[/pull|rücken|back|zieh/i,"lz"],[/bein|leg|unterk|lower|quad|squat/i,"squat"],[/po\b|gesäß|glute/i,"hipthrust"],
+  [/schulter|shoulder/i,"ohp"],[/arm|bizeps|trizeps|biceps|triceps/i,"curl"],[/bauch|core|abs/i,"crunch"],[/oberk|upper/i,"dbbench"],[/ganzk|full|total/i,"deadlift"],[/cardio|ausdauer/i,"farmer"]];
+function wIcon(w){
+  const figOf=id=>FIG[id]?id:(FIG[FIG_ALIAS[id]]?FIG_ALIAS[id]:null);
+  let fid=null, eid=null; for(const e of ((w&&w.exercises)||[])){ const f=figOf(e.id); if(f){ fid=f; eid=e.id; break; } }
+  if(!fid){ const n=String((w&&w.name)||""); const m=W_NAME_FIG.find(([re])=>re.test(n)); fid=m?m[1]:"deadlift"; eid=fid; }
+  const fd=FIG[fid]; const t=eid==="lz"||fid==="lz"?0:(fd&&fd.thumbT!=null?fd.thumbT:1);
+  return `<span class="wb-fig">${figSVG(fid,t)}</span>`; }
 /* Voraussichtliches Trainingsende: offene Sätze × (Satzdauer + Pause der Übung), kalibriert an deinen bisherigen Trainingszeiten */
 function etaFactor(){
   if(etaFactor.c && etaFactor.n===S.history.length) return etaFactor.c;

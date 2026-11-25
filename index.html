@@ -1621,6 +1621,45 @@ window.addEventListener("offline", netPaint);
 setInterval(()=>{ if(netPending()) netRetry(); }, 15000);
 function cloudErr(e){ if(!navigator.onLine){ netPaint(); return; } try{ console.warn("Cloud-Speichern fehlgeschlagen", e); }catch(_){} if(Date.now()-cloudErrShown>8000){ cloudErrShown=Date.now(); try{ toast("Cloud-Sync fehlgeschlagen ("+((e&&e.code)||(e&&e.message)||"Fehler")+") – lokal gespeichert"); }catch(_){} } }
 window.addEventListener("error", ev=>{ try{ if(!ev.filename || /^Script error\.?$/i.test(String(ev.message||""))) return; /* fremde Skripte (z. B. Safari-Teilen, Erweiterungen) – nicht unsere App */ toast("Fehler: "+String(ev.message||"unbekannt").slice(0,80)); }catch(_){} });
+/* ================= Fehler melden: Protokoll der letzten Schritte (bleibt nur auf dem Gerät, bis jemand meldet) ================= */
+const BUG_KEY="ga-buglog";
+let BUGLOG=(()=>{ try{ return JSON.parse(localStorage.getItem(BUG_KEY)||"[]"); }catch(_){ return []; } })();
+function bugLog(k, msg, extra){ BUGLOG.push({t:Date.now(), k, m:String(msg||"").slice(0,300), ...(extra||{})}); if(BUGLOG.length>60) BUGLOG=BUGLOG.slice(-60);
+  clearTimeout(bugLog.t); bugLog.t=setTimeout(()=>{ try{ localStorage.setItem(BUG_KEY, JSON.stringify(BUGLOG)); }catch(_){} }, 300); }
+window.addEventListener("error", ev=>{ try{ bugLog("error", ev.message, {src:String(ev.filename||"").split("/").pop()+":"+ev.lineno+":"+ev.colno, stack:String(ev.error&&ev.error.stack||"").slice(0,800)}); }catch(_){} }, true);
+window.addEventListener("unhandledrejection", ev=>{ try{ const r=ev.reason; bugLog("error", (r&&r.message)||r||"Promise", {stack:String(r&&r.stack||"").slice(0,800), code:r&&r.code}); }catch(_){} });
+document.addEventListener("click", ev=>{ try{ const b=ev.target.closest && ev.target.closest("[data-act],[data-hold],[data-gpush],button,a"); if(!b) return;
+  const d={}; for(const k in b.dataset){ if(k!=="act") d[k]=String(b.dataset[k]).slice(0,40); }
+  bugLog("tap", b.dataset.act || b.dataset.hold || b.dataset.gpush || (b.textContent||"").trim().slice(0,40), Object.keys(d).length?{d}:null); }catch(_){} }, true);
+document.addEventListener("change", ev=>{ try{ const i=ev.target; if(!i || !i.matches || !i.matches("input,select,textarea")) return; bugLog("input", i.dataset.nu||i.dataset.in||i.id||i.name||i.type, {v:String(i.type==="password"?"***":i.value).slice(0,40)}); }catch(_){} }, true);
+function bugScreen(){ // was gerade zu sehen war (oberstes offenes Fenster ohne das Einstellungsfenster), als Text
+  const open=[...document.querySelectorAll(".sheet.open")].map(e=>e.id).filter(Boolean);
+  const top=open.length?$(open[open.length-1]):$("home"); const sc=top&&top.querySelector(".sheet-scroll");
+  return {open, tab:UI.tab, sub:UI.tab==="nutrition"?UI.nuTab:null, ex:UI.ex||null, preview:UI.preview||null, edit:!!UI.edit,
+    scroll: sc?Math.round(sc.scrollTop):Math.round(scrollY), text: String((top&&top.innerText)||"").replace(/\n{2,}/g,"\n").slice(0,1500)}; }
+function bugAnalyze(log){ // einfache Auswertung ohne KI: Fehler im Code? Nach welcher Aktion?
+  const now=Date.now(), recent=log.filter(x=>now-x.t<10*60000);
+  const err=[...recent].reverse().find(x=>x.k==="error");
+  const taps=recent.filter(x=>x.k==="tap" && !["bugReport","settings"].includes(x.m)).map(x=>x.m);
+  const lastTaps=taps.slice(-5).join(" → ");
+  if(err){ const i=recent.indexOf(err); const before=[...recent.slice(0,i)].reverse().find(x=>x.k==="tap");
+    return `Code-Fehler: ${err.m}${err.src?" ("+err.src+")":""}${before?` – direkt nach „${before.m}“`:""}. Letzte Schritte: ${lastTaps||"–"}`; }
+  const errToast=[...recent].reverse().find(x=>x.k==="toast" && /fehler|fehlgeschlagen|nicht möglich/i.test(x.m));
+  if(errToast) return `Fehlermeldung angezeigt: „${errToast.m}“. Letzte Schritte: ${lastTaps||"–"}`;
+  return `Kein Code-Fehler erkannt – vermutlich Darstellung oder falscher Wert. Letzte Schritte: ${lastTaps||"–"}`;
+}
+async function bugReport(){
+  if(!window.gymArcBug){ toast("Fehler melden geht nur in der App mit Konto"); return; }
+  const btn=document.querySelector('[data-act=bugReport]'); if(btn){ btn.disabled=true; btn.textContent="Wird gesendet …"; }
+  const log=BUGLOG.slice(-40);
+  const a=S.active; let act=null; try{ if(a){ const w=AW(a); act={w:a.workoutId, pick:a.pick||null, ex:Object.fromEntries(Object.entries(a.ex).map(([k,x])=>[k,(x.sets||[]).map(s=>[s.kg,s.reps,s.done?1:0,s.skip?1:0].join("/")).join(" ")])), order:w?w.exercises.map(e=>e.id):null}; } }catch(_){}
+  const rep={ summary: bugAnalyze(log), screen: bugScreen(), log, active: act,
+    app:{ v: (window.GA_VERSION||""), sw: await (async()=>{ try{ return (await caches.keys()).filter(k=>/gym-arc/.test(k)).join(","); }catch(_){ return ""; } })(),
+      ua:navigator.userAgent, w:innerWidth, h:innerHeight, standalone: !!(navigator.standalone || matchMedia("(display-mode: standalone)").matches), online:navigator.onLine, mode:S.mode },
+    at:new Date().toISOString() };
+  try{ await window.gymArcBug.send(rep); closeModal(); toast("Danke – Fehler wurde gemeldet"); BUGLOG=[]; try{ localStorage.removeItem(BUG_KEY); }catch(_){} }
+  catch(e){ if(btn){ btn.disabled=false; btn.textContent="Fehler melden"; } toast(e&&e.code==="rate"?"Heute schon genug Meldungen – danke!":"Senden fehlgeschlagen – bitte später nochmal"); }
+}
 window.addEventListener("unhandledrejection", ev=>{ try{ const r=ev.reason; if(r && r.code) return; toast("Fehler: "+String((r&&r.message)||r||"unbekannt").slice(0,80)); }catch(_){} });
 async function initCloud(){
   try{
@@ -1797,7 +1836,7 @@ let toastT;
 function toastPrep(t){ if(!t._gaEnd){ t._gaEnd=1; t.addEventListener("transitionend",e=>{ if(e.propertyName==="transform" && !t.classList.contains("show")){ t.classList.remove("pr"); t.style.display="none"; } }); }
   if(t.style.display==="none"){ t.style.display=""; void t.offsetWidth; } }
 function toastHide(){ const t=$("toast"); t.classList.remove("show"); setTimeout(()=>{ if(!t.classList.contains("show")){ t.classList.remove("pr"); t.style.display="none"; } }, 450); }
-function toast(msg){ const t=$("toast"); toastPrep(t); t.classList.remove("pr"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(toastHide,2200); }
+function toast(msg){ try{ bugLog("toast", String(msg).slice(0,120)); }catch(_){} const t=$("toast"); toastPrep(t); t.classList.remove("pr"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(toastHide,2200); }
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 /* ================= UI state ================= */
@@ -6098,6 +6137,7 @@ document.addEventListener("click", ev=>{
     case "wNewFromLib": UI.wAfterAdd=b.dataset.id; wEditModal(null); break;
     case "libDelEx": { const id=b.dataset.id; if(S.settings.customEx) delete S.settings.customEx[id]; try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} saveLocal(); saveSettingsRemote(); closeModal(); renderHome(); toast("Übung gelöscht"); break; }
     case "libAdd": libAdd(b.dataset.id, b.dataset.w); break;
+    case "bugReport": bugReport(); break;
     case "pickSlot": pickSlot(b.dataset.slot, b.dataset.alt==="1"); break;
     case "edStart": editStart(b.dataset.w); break;
     case "edCancel": UI.edit=null; renderPreview(); break;
@@ -6522,6 +6562,9 @@ function settingsModal(){
     <div class="fv-l" style="margin-top:18px">Daten</div>
     <div class="st-bk"><button class="m-btn" data-act="bkExport">↑ Exportieren</button><button class="m-btn" data-act="bkImport">↓ Importieren</button></div>
     ${bkLastText()}
+    ${window.gymArcBug?`<div class="fv-l" style="margin-top:18px">Problem?</div>
+    <button class="m-btn" data-act="bugReport">Fehler melden</button>
+    <p class="st-note" style="margin:6px 0 0;font-size:13px;color:var(--muted)">Schickt die letzten Schritte in der App und den aktuellen Bildschirm an den Entwickler. Keine Eingabe nötig.</p>`:""}
 `);
 }
 // Farbe/Darstellung: Fenster bleibt stehen (kein Neuaufbau, kein Springen), nur die Auswahl und die Seite dahinter werden aktualisiert

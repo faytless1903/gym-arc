@@ -872,6 +872,7 @@
   try{ navigator.serviceWorker && navigator.serviceWorker.addEventListener("message", function(ev){ var k = ev.data && ev.data.gaOpen; if(k) setTimeout(function(){ gaOpen(k); }, 150); }); }catch(_){}
   (function(){ try{ var q = new URLSearchParams(location.search), k = q.get("open"); if(!k) return; history.replaceState(null, "", location.pathname);
     var n = 0, t = setInterval(function(){ n++; if((typeof S !== "undefined" && S && (k !== "rest" || S.active) && document.getElementById("home") && document.getElementById("home").children.length) || n > 40){ clearInterval(t); gaOpen(k); } }, 250); }catch(_){} })();
+  window.gymArcBug = { send: function(rep){ return callFn("push", { action: "bug", report: rep }); } };
   window.gymArcRecipe = { load: function(url){ return callFn("recipe", { url: url }); } };
   window.gymArcPhotos = { upload: phUpload, html: function(){
     if(!sess) return "";

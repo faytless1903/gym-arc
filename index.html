@@ -75,7 +75,7 @@ input{font:inherit;color:inherit}
 .h-top{min-height:0}
 body.noscroll{position:fixed;inset:0;overflow:hidden;touch-action:none}
 body.noscroll .sheet,body.noscroll .timer-panel,body.noscroll .modal{touch-action:auto}
-.home.fit{height:100dvh;overflow:hidden;padding-bottom:calc(var(--safe-b) + 84px)}
+.home.fit{min-height:100dvh;padding-bottom:calc(var(--safe-b) + 84px)}
 body.has-resume .home.fit .today-line{display:none}
 body.has-resume .home.fit{padding-bottom:calc(var(--safe-b) + 160px)}
 @media (max-height:740px){
@@ -1885,8 +1885,12 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){} try{ activeOrphanFix();
     ${S.mode!=="owner"?`<button class="ed-add" data-act="wNew">+ Split anlegen</button>`:""}
   </div>`;
   renderTabbar();
-  renderResume();
+  renderResume();  homeFitCheck();
 }
+/* Startseite nur sperren, wenn alles auf den Bildschirm passt – sonst normal scrollen (z. B. bei 3+ Splits) */
+function homeFitCheck(){ const h=document.querySelector(".home.fit"); if(!h || UI.tab!=="train") return;
+  const over=h.scrollHeight > window.innerHeight+2; document.body.classList.toggle("noscroll", !over); }
+window.addEventListener("resize", ()=>{ try{ homeFitCheck(); }catch(_){} });
 function renderTabbar(){
   $("tabbar").innerHTML = `
     <button class="tab ${UI.tab==="train"||UI.tab==="history"?"on":""}" data-act="tab" data-tab="train">${IC.dumbTab}Training</button>

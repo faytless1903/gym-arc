@@ -1092,6 +1092,7 @@ body.ob-mode .tabbar{display:none}
 .ob-skip{margin:6px 0 4px}
 .lib-new{margin:0 0 14px}
 .ne-top{display:flex;gap:10px;align-items:center}.ne-top .ex-thumb{flex-shrink:0}.ne-top input{flex:1;min-width:0}
+.co-mdl{display:block;margin-top:6px;font-size:11px;color:var(--faint)}
 .w-empty{background:var(--surface);border-radius:var(--r-lg);padding:18px;margin-bottom:12px}.w-empty b{display:block;font-size:17px;margin-bottom:4px}.w-empty span{color:var(--muted);font-size:14px;line-height:1.45}
 .wb-ini{font-weight:800;font-size:22px;color:#fff;letter-spacing:-.02em}
 .ob-opt{display:block;width:100%;text-align:left;background:var(--surface);border-radius:18px;padding:16px 18px;margin-bottom:10px}
@@ -4678,6 +4679,20 @@ function coachOpen(){
     <div class="rcc-in co-in"><input id="coachIn" placeholder="Frag deinen Coach …" autocomplete="off" enterkeyhint="send"><button class="m-btn pri" data-act="coachSend" aria-label="Senden">↑</button></div>`);
   const lg=$("coLog"); if(lg) lg.scrollTop=lg.scrollHeight;
 }
+/* Coach: einfache Fragen → Haiku (günstig), komplexe → Sonnet. Entscheidung lokal, ohne extra Anfrage. */
+function coachTier(msg, C){
+  const t=String(msg||"").toLowerCase(), words=t.split(/\s+/).filter(Boolean).length;
+  const complex=/plan|analys|auswert|warum|wieso|weshalb|vergleich|strateg|stagn|plateau|fortschritt|entwickl|trend|optimier|verbesser|anpass|umstell|empfehl|soll ich|sollte ich|lohnt|sinnvoll|besser|unterschied|vor- und nachteil|erstell|berechn|rechne|prognos|bis wann|wie lange|cut|bulk|defizit|überschuss|makro|verletz|schmerz|deload|periodis|split|woche|monat/;
+  const simple=/^(was|wie viel|wieviel|wie viele|welche[rsn]?|wann|wo|ist|sind|hat|habe|kann|darf)\b/;
+  if(/^(danke|ok|okay|super|passt|alles klar|top|perfekt)\b/.test(t) && words<=5) return "quick";
+  if(words>35 || (t.match(/\?/g)||[]).length>1) return "default";
+  if(complex.test(t)) return "default";
+  // Rückfrage auf eine ausführliche Sonnet-Antwort bleibt bei Sonnet
+  const last=[...(C.msgs||[])].reverse().find(m=>m.role==="assistant");
+  if(last && last.model==="default" && words<=6) return "default";
+  if(words<=14 || simple.test(t)) return "quick";
+  return "default";
+}
 async function coachSend(q){
   const C=UI.coach; if(!C) return; const el=$("coachIn"); const msg=String(q||(el&&el.value)||"").trim(); if(!msg || C.busy) return;
   if(el) el.value=""; C.busy=true; C.t=Date.now();
@@ -4692,9 +4707,11 @@ async function coachSend(q){
   const msgs=C.msgs.slice(-9).map((m,i)=>({role:m.role, content: i===0 ? sys+"\n\nFRAGE: "+m.content : m.content}));
   if(msgs[0].role!=="user") msgs.shift();
   try{
-    const res=await sample(msgs.length===1 ? msgs[0].content : msgs, {modelTier:"default", cache:false});
+    const tier=coachTier(msg, C);
+    const res=await sample(msgs.length===1 ? msgs[0].content : msgs, {modelTier:tier, cache:false});
     const txt=String((res&&res.text)||"").trim()||"Keine Antwort erhalten.";
-    if(w) w.remove(); add("c", txt); C.msgs.push({role:"assistant", content:txt});
+    if(w) w.remove(); const d=add("c", txt); if(d) d.insertAdjacentHTML("beforeend", `<span class="co-mdl">${tier==="quick"?"Haiku · kurze Frage":"Sonnet · ausführlich"}</span>`);
+    C.msgs.push({role:"assistant", content:txt, model:tier});
   }catch(e){ if(w) w.remove(); add("c", e&&e.code==="rate_limited"?"Gerade zu viele Anfragen – bitte kurz warten.":"Das hat nicht geklappt – bitte nochmal versuchen."); C.msgs.pop(); }
   C.busy=false;
 }

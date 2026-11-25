@@ -2179,6 +2179,9 @@ function openHistDetail(id){
 function histRerender(id){ const sc=$("histsheet").querySelector(".sheet-scroll"); openHistDetail._keep=sc?sc.scrollTop:0; openHistDetail(id); }
 function closeHist(){ UI.histEdit=null; try{ kpHide(false); }catch(_){} $("histsheet").classList.remove("open"); $("scrimH").classList.remove("open"); }
 /* ================= Preview sheet ================= */
+// Plan bearbeiten: neu zeichnen, ohne dass die Liste nach oben springt
+function renderPreviewKeep(){ const P=$("preview"), sc=P&&P.querySelector(".sheet-scroll"), t1=sc?sc.scrollTop:0, t2=P?P.scrollTop:0;
+  renderPreview(); const sc2=P&&P.querySelector(".sheet-scroll"); if(sc2) sc2.scrollTop=t1; if(P) P.scrollTop=t2; }
 function renderPreview(){
   const w = W(UI.preview); if(!w) return;
   if(UI.edit && UI.edit.wid===w.id){ $("preview").innerHTML = renderEditPreview(w); return; }
@@ -6018,14 +6021,14 @@ document.addEventListener("click", ev=>{
     case "edStart": editStart(b.dataset.w); break;
     case "edCancel": UI.edit=null; renderPreview(); break;
     case "edSave": editSave(); break;
-    case "edDel": UI.edit.list.splice(+b.dataset.i,1); renderPreview(); break;
-    case "edMove": { const i=+b.dataset.i, j=i+(+b.dataset.d), L=UI.edit.list; if(j>=0&&j<L.length){ [L[i],L[j]]=[L[j],L[i]]; renderPreview(); } break; }
+    case "edDel": UI.edit.list.splice(+b.dataset.i,1); renderPreviewKeep(); break;
+    case "edMove": { const i=+b.dataset.i, j=i+(+b.dataset.d), L=UI.edit.list; if(j>=0&&j<L.length){ [L[i],L[j]]=[L[j],L[i]]; renderPreviewKeep(); } break; }
     case "edNum": { const x=UI.edit.list[+b.dataset.i], d=+b.dataset.d;
       if(b.dataset.f==="sets") x.sets=Math.min(6,Math.max(1,x.sets+d));
       else { x.reps=Math.min(30,Math.max(3,x.reps+d)); if(x.repsMax) x.repsMax=x.reps+3; }
-      renderPreview(); break; }
-    case "edRest": { const x=UI.edit.list[+b.dataset.i], opts=[60,90,120,150,180]; x.rest=opts[(opts.indexOf(x.rest)+1)%opts.length]; renderPreview(); break; }
-    case "edRange": { const x=UI.edit.list[+b.dataset.i]; x.repsMax = x.repsMax? null : x.reps+3; renderPreview(); break; }
+      renderPreviewKeep(); break; }
+    case "edRest": { const x=UI.edit.list[+b.dataset.i], opts=[60,90,120,150,180]; x.rest=opts[(opts.indexOf(x.rest)+1)%opts.length]; renderPreviewKeep(); break; }
+    case "edRange": { const x=UI.edit.list[+b.dataset.i]; x.repsMax = x.repsMax? null : x.reps+3; renderPreviewKeep(); break; }
     case "edAddOpen": editAddModal(); break;
     case "edAdd": { const d=exDef(b.dataset.id); UI.edit.list.push({id:d.id, sets:d.sets||3, reps:d.reps||10, repsMax:d.repsMax||null, rest:d.rest||120}); closeModal(); renderPreview(); setTimeout(()=>{ const sc=$("preview").querySelector(".sheet-scroll"); if(sc) sc.scrollTop=sc.scrollHeight; },50); break; }
     case "edReset": { if(S.settings.plan) delete S.settings.plan[UI.edit.wid]; if(S.settings.order) delete S.settings.order[UI.edit.wid]; saveLocal(); saveSettingsRemote(); buildPlan(); applyOrder(); UI.edit=null; renderPreview(); renderHome(); toast("Standardplan wiederhergestellt"); break; }

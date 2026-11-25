@@ -21,6 +21,9 @@
       'body .modal-box,body #bcScan .bc-box{border-radius:26px 26px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}body .modal-box{max-height:calc(100dvh - var(--safe-t) - 8px)}' +
       '.gs-card{background:var(--tile);border-radius:14px;padding:0 14px}.gs-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;font-weight:600;font-size:16px}.gs-row+.gs-row{border-top:1px solid var(--line)}.gs-row.dis{color:var(--muted)}' +
       '.gs-sw{position:relative;width:51px;height:31px;border-radius:16px;background:color-mix(in srgb,var(--muted) 45%,transparent);flex-shrink:0;transition:background .2s}.gs-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .2s}.gs-sw.on{background:var(--accent)}.gs-sw.on::after{transform:translateX(20px)}.gs-sw:disabled{opacity:.45}' +
+      '.ga-acc{background:var(--tile);border-radius:16px;padding:14px;margin-bottom:10px}.ga-acc-h b{display:block;font-size:16px;word-break:break-all}.ga-acc-h span{font-size:13px;color:var(--muted)}' +
+      '.ga-acc-n{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 4px}.ga-acc-n div{background:var(--surface);border-radius:12px;padding:8px 10px}.ga-acc-n span,.ga-acc-n em{display:block;font-size:12px;color:var(--muted);font-style:normal}.ga-acc-n b{display:block;font-size:16px}' +
+      '.ga-acc .gs-row{min-height:46px}.ga-lim{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}.ga-lim span{flex:1}.ga-lim button{border:0;border-radius:10px;padding:7px 12px;font:inherit;font-weight:700;background:var(--surface);color:var(--muted)}.ga-lim button.on{background:var(--accent);color:#fff}' +
       '.gs-test{background:none;padding:0 0 0 6px;color:var(--accent);font-weight:600;font-size:14px}' +
       '.ga-use{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;padding:0;font:inherit;color:var(--muted);font-size:14px;line-height:1.4}.ga-use i{font-style:normal;color:var(--accent);font-size:18px;flex-shrink:0}' +
       '.ga-ul{background:var(--tile);border-radius:14px;padding:0 14px}.ga-ur{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0}.ga-ur+.ga-ur{border-top:1px solid var(--line)}.ga-ur b{display:block;font-size:15px;font-weight:650;color:var(--ink)}.ga-ur span{font-size:12px;color:var(--muted)}.ga-ur em{font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}' +
@@ -46,6 +49,14 @@
   /* ---------- Anmeldung (E-Mail-Code, Supabase Auth) ---------- */
   var sess = null;
   try{ sess = JSON.parse(localStorage.getItem(SK) || "null"); }catch(_){ sess = null; }
+  /* Mehrere Konten: Besitzer = dein Supabase-Konto, alle anderen bekommen einen eigenen, leeren Bereich */
+  var OWNER_UID = "b489f427-ee44-495c-bdb4-858ae3c9773f";
+  function subOf(s){ try{ var p = s.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return JSON.parse(atob(p + "===".slice((p.length + 3) % 4))).sub || null; }catch(_){ return null; } }
+  function isOwnerAcc(){ var u = sess && subOf(sess); return !!u && u === OWNER_UID; }
+  function appUid(){ var u = sess && subOf(sess); return !u ? null : u === OWNER_UID ? OWNER : "u_" + u; }
+  // Jedes Konto hat seine eigene lokale Ablage auf dem Gerät (Besitzer behält die bisherige)
+  window.GA_LS_SUFFIX = (function(){ var u = sess && subOf(sess); return !u || u === OWNER_UID ? "" : "-" + u.slice(0, 8); })();
+  window.GA_IS_OWNER = isOwnerAcc();
   function store(s){ sess = s; try{ if(s) localStorage.setItem(SK, JSON.stringify(s)); else localStorage.removeItem(SK); }catch(_){} }
   function keep(d, email){
     store({ access_token: d.access_token, refresh_token: d.refresh_token,
@@ -138,8 +149,8 @@
     doc: function(path){ return docRef(String(path).split("/").pop()); }
   };
   var USER = {
-    id: async function(){ return OWNER; }, me: async function(){ return { id: OWNER, name: "" }; },
-    isOwner: function(){ return true; }, canEdit: function(){ return true; }, can: function(){ return true; },
+    id: async function(){ return appUid(); }, me: async function(){ return { id: appUid(), name: "" }; },
+    isOwner: function(){ return isOwnerAcc(); }, canEdit: function(){ return true; }, can: function(){ return true; },
     profiles: async function(){ return {}; }, search: async function(){ return []; }
   };
 
@@ -218,7 +229,9 @@
     box('<h2>Anmelden</h2><p>Mit Passwort – oder ohne Passwort per Link aus einer E-Mail.</p>' +
       '<input id="gaMail" type="email" autocomplete="username" inputmode="email" data-native placeholder="E-Mail-Adresse" value="' + String(email || CFG.email || (sess && sess.email) || "").replace(/"/g, "") + '">' +
       '<input id="gaPw" type="password" autocomplete="current-password" data-native placeholder="Passwort">' +
-      '<div class="msg" id="gaMsg"></div><button class="pri" id="gaPwGo">Anmelden</button><button id="gaSend">Ohne Passwort: Link per E-Mail</button>');
+      '<div class="msg" id="gaMsg"></div><button class="pri" id="gaPwGo">Anmelden</button><button id="gaSend">Ohne Passwort: Link per E-Mail</button>' +
+      '<p style="margin:14px 0 8px;text-align:center">Neu hier?</p><button id="gaNewAcc">Konto erstellen</button>');
+    $("gaNewAcc").onclick = function(){ showSignup($("gaMail").value.trim()); };
     async function pwLogin(){
       var em = $("gaMail").value.trim().toLowerCase(), pw = $("gaPw").value;
       if(!/^\S+@\S+\.\S+$/.test(em)){ msg("Bitte eine gültige E-Mail-Adresse eingeben."); return; }
@@ -236,8 +249,32 @@
     }
     $("gaSend").onclick = send;
   }
-  function showCode(em){
-    box('<h2>E-Mail prüfen</h2><p>Wir haben dir eine E-Mail an <b>' + em.replace(/</g, "&lt;") + '</b> geschickt.</p>' +
+  function showSignup(email){
+    box('<h2>Konto erstellen</h2><p>Mit E-Mail und Passwort. Deine Daten liegen in einem eigenen, privaten Bereich – niemand sonst sieht sie.</p>' +
+      '<input id="gaMail" type="email" autocomplete="username" inputmode="email" data-native placeholder="E-Mail-Adresse" value="' + String(email || "").replace(/"/g, "") + '">' +
+      '<input id="gaPw" type="password" autocomplete="new-password" data-native placeholder="Passwort (mind. 8 Zeichen)">' +
+      '<input id="gaPw2" type="password" autocomplete="new-password" data-native placeholder="Passwort wiederholen">' +
+      '<div class="msg" id="gaMsg"></div><button class="pri" id="gaSignGo">Konto erstellen</button><button id="gaBack">Zurück zur Anmeldung</button>');
+    $("gaBack").onclick = function(){ showLogin($("gaMail").value.trim()); };
+    async function go(){
+      var em = $("gaMail").value.trim().toLowerCase(), pw = $("gaPw").value, pw2 = $("gaPw2").value;
+      if(!/^\S+@\S+\.\S+$/.test(em)){ msg("Bitte eine gültige E-Mail-Adresse eingeben."); return; }
+      if(pw.length < 8){ msg("Das Passwort braucht mindestens 8 Zeichen."); return; }
+      if(pw !== pw2){ msg("Die Passwörter stimmen nicht überein."); return; }
+      $("gaSignGo").disabled = true; msg("");
+      try{
+        var d = await authCall("signup?redirect_to=" + encodeURIComponent(location.origin + location.pathname), { email: em, password: pw });
+        if(d && d.access_token){ keep(d, em); await afterLogin(); return; }
+        // E-Mail-Bestätigung aktiv: Link/Code aus der Mail einfügen (wie beim Anmelden per Link)
+        showCode(em, true);
+      }catch(e){ $("gaSignGo").disabled = false;
+        msg(e.code === "unavailable" ? "Keine Verbindung." : e.code === "rate_limited" ? "Zu viele Versuche – bitte kurz warten." :
+          /registered|already|exists/i.test(e.message || "") ? "Für diese E-Mail gibt es schon ein Konto – bitte anmelden." : "Konto konnte nicht erstellt werden: " + e.message); }
+    }
+    $("gaSignGo").onclick = go; onEnter("gaPw2", go);
+  }
+  function showCode(em, fromSignup){
+    box('<h2>E-Mail prüfen</h2><p>' + (fromSignup ? 'Fast geschafft – bestätige dein Konto. ' : '') + 'Wir haben dir eine E-Mail an <b>' + em.replace(/</g, "&lt;") + '</b> geschickt.</p>' +
       '<p><b>Am PC / in Safari:</b> einfach den Link in der Mail antippen.<br><b>In der App vom Home-Bildschirm:</b> Link in der Mail lange drücken → „Link kopieren“ → hier einfügen.</p>' +
       '<input id="gaCode" type="text" data-native autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Link oder Code einfügen">' +
       '<div class="msg" id="gaMsg"></div><button class="pri" id="gaVerify">Anmelden</button><button id="gaBack">Andere E-Mail / neu senden</button>');
@@ -298,8 +335,9 @@
   }
   async function afterLogin(){
     if(sess && !sess.email){ try{ var t = await token(); var ur = await fetch(BASE + "/auth/v1/user", { headers: { apikey: KEY, Authorization: "Bearer " + t } }); if(ur.ok){ var u = await ur.json(); if(u && u.email){ sess.email = u.email; store(sess); } } }catch(_){} }
-    try{ var any = await rest("GET", "?select=id&limit=1"); if(!any || !any.length) await showMigrate(); }catch(_){}
-    close(); readyResolve();
+    if(isOwnerAcc()){ try{ var any = await rest("GET", "?select=id&limit=1"); if(!any || !any.length) await showMigrate(); }catch(_){} }
+    // Neu laden, damit die App mit der lokalen Ablage genau dieses Kontos startet
+    close(); location.reload();
   }
   function boot(){
     // Rückkehr vom Anmelde-Link (Safari/PC): Zugang steht in der Adresse hinter #
@@ -414,22 +452,25 @@
   var UK = "ga-usage";
   function usageCache(){ try{ return JSON.parse(localStorage.getItem(UK) || "null"); }catch(_){ return null; } }
   function usageText(u){
-    var lim = +CFG.monthlyLimit || 5;
+    var lim = isOwnerAcc() ? (+CFG.monthlyLimit || 5) : (u && u.lim) || 2;
     if(!u) return "Verbrauch wird geladen …";
     if(u.off) return "Verbrauch noch nicht eingerichtet.";
+    if(!isOwnerAcc() && u.allowed === false) return "Claude-Funktionen sind für dein Konto noch nicht freigeschaltet.";
     var eur = function(v){ return v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
     return "Diesen Monat: " + u.n + (u.n === 1 ? " Anfrage" : " Anfragen") + " · ca. " + eur(u.cost) + " $ von " + eur(lim) + " $";
   }
   async function usageLoad(){
     var el = document.getElementById("gaUse"); if(!el || !sess) return;
     try{
-      var d = new Date(), start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+      var d = new Date(), start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
       var t = await token(), r = await fetch(BASE + "/rest/v1/claude_usage?select=cost_usd&created_at=gte." + encodeURIComponent(start),
         { headers: { apikey: KEY, Authorization: "Bearer " + t }, cache: "no-store" });
       var u;
       if(r.status === 404 || r.status === 400){ u = { off: true }; }
       else if(!r.ok) return;
       else { var rows = await r.json(); u = { n: rows.length, cost: rows.reduce(function(a, x){ return a + (+x.cost_usd || 0); }, 0) }; }
+      if(u && !u.off && !isOwnerAcc()){ try{ var ar = await fetch(BASE + "/rest/v1/app_access?select=allowed,monthly_limit_usd", { headers: { apikey: KEY, Authorization: "Bearer " + t }, cache: "no-store" });
+        var al = ar.ok ? await ar.json() : []; u.allowed = !!(al[0] && al[0].allowed); u.lim = al[0] ? +al[0].monthly_limit_usd : 2; }catch(_){} }
       try{ localStorage.setItem(UK, JSON.stringify(u)); }catch(_){}
       el = document.getElementById("gaUse"); if(el) el.textContent = usageText(u);
     }catch(_){}
@@ -464,13 +505,52 @@
     var k = b.getAttribute("data-gacc");
     if(k === "pw"){ try{ if(typeof closeModal === "function") closeModal(); }catch(_){} showPwSet(); }
     else if(k === "out"){ window.gymArcLogout(); }
+    else if(k === "accs"){ accList(); }
+    else if(k === "accAllow"){ accSet(b.getAttribute("data-u"), b.getAttribute("data-on") !== "1", +b.getAttribute("data-lim")); }
+    else if(k === "accLim"){ accSet(b.getAttribute("data-u"), true, +b.getAttribute("data-lim")); }
   }, true);
+  /* Besitzer: alle Konten mit Claude-Kosten je Monat und Freigabe */
+  async function rpc(name, body){
+    for(var i = 0; i < 2; i++){
+      var t = await token(i > 0), r;
+      try{ r = await fetch(BASE + "/rest/v1/rpc/" + name, { method: "POST", cache: "no-store", headers: { apikey: KEY, Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); }
+      catch(e){ throw E("unavailable", "Keine Verbindung"); }
+      if(r.status === 401 && i === 0) continue;
+      var tx = await r.text(); if(!r.ok) throw E("rpc", tx.slice(0, 160)); return tx ? JSON.parse(tx) : null;
+    }
+    throw E("not_granted");
+  }
+  var usd = function(v){ return (+v || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $"; };
+  var dDE = function(s){ return s ? new Date(s).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; };
+  async function accList(){
+    modal('<h3>Konten & Kosten</h3><p class="nu-hint">Wird geladen …</p>');
+    try{
+      var L = await rpc("ga_accounts") || [];
+      var mon = new Date().toLocaleDateString("de-DE", { month: "long" }), prev = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("de-DE", { month: "long" });
+      var sum = L.reduce(function(a, x){ return a + (+x.cost_month || 0); }, 0), sumP = L.reduce(function(a, x){ return a + (+x.cost_prev || 0); }, 0);
+      modal('<h3>Konten & Kosten</h3><p class="pc-sub" style="margin:-4px 0 12px">Claude gesamt · ' + mon + ': ' + usd(sum) + ' · ' + prev + ': ' + usd(sumP) + '</p>' +
+        L.map(function(x){
+          var own = !!x.is_owner, on = own || !!x.allowed, lim = +x.monthly_limit_usd || 2;
+          return '<div class="ga-acc"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + (own ? ' <span class="nx">Du</span>' : '') + '</b><span>Konto seit ' + dDE(x.created_at) + ' · zuletzt aktiv ' + dDE(x.last_sign_in_at) + '</span></div>' +
+            '<div class="ga-acc-n"><div><span>' + mon + '</span><b>' + usd(x.cost_month) + '</b><em>' + (+x.n_month || 0) + ' Anfragen</em></div><div><span>' + prev + '</span><b>' + usd(x.cost_prev) + '</b><em>' + (+x.n_prev || 0) + ' Anfragen</em></div><div><span>Gesamt</span><b>' + usd(x.cost_total) + '</b><em>&nbsp;</em></div></div>' +
+            (own ? '' : '<div class="gs-row"><span>Claude-Funktionen</span><button class="gs-sw' + (on ? ' on' : '') + '" data-gacc="accAllow" data-u="' + x.user_id + '" data-on="' + (on ? 1 : 0) + '" data-lim="' + lim + '" aria-label="Claude freigeben"></button></div>' +
+              (on ? '<div class="ga-lim"><span>Monatslimit</span>' + [1, 2, 5].map(function(v){ return '<button class="' + (lim === v ? 'on' : '') + '" data-gacc="accLim" data-u="' + x.user_id + '" data-lim="' + v + '">' + v + ' $</button>'; }).join("") + '</div>' : '')) +
+            '</div>';
+        }).join("") +
+        '<p class="nu-hint" style="margin-top:10px">Neue Konten können Claude erst nutzen, wenn du sie hier freigibst. Das Limit gilt pro Monat; dein Anthropic-Limit gilt zusätzlich für alle zusammen.</p>' +
+        '<button class="m-btn" data-act="settings" style="margin-top:8px">Zurück</button>');
+    }catch(e){ modal('<h3>Konten & Kosten</h3><p>Konnte nicht geladen werden.</p><button class="m-btn" data-act="settings">Zurück</button>'); }
+  }
+  async function accSet(uid, allow, lim){
+    try{ await rpc("ga_set_access", { target: uid, allow: !!allow, lim: lim || 2 }); toast2(allow ? "Freigegeben" : "Gesperrt"); accList(); }
+    catch(e){ toast2("Nicht gespeichert: " + (e.message || e.code)); }
+  }
   /* Liste der Claude-Anfragen dieses Monats (wofür, Modell, Kosten) */
   async function usageList(){
     if(!sess) return;
     modal('<h3>Claude-Anfragen</h3><p class="nu-hint">Wird geladen …</p>');
     try{
-      var d = new Date(), start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+      var d = new Date(), start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
       var t = await token(), r = await fetch(BASE + "/rest/v1/claude_usage?select=created_at,model,cost_usd,what,input_tokens,output_tokens&order=created_at.desc&created_at=gte." + encodeURIComponent(start),
         { headers: { apikey: KEY, Authorization: "Bearer " + t }, cache: "no-store" });
       var rows = r.ok ? await r.json() : [];
@@ -487,7 +567,9 @@
   document.addEventListener("click", function(ev){ var b = ev.target.closest && ev.target.closest("[data-guse]"); if(!b) return; ev.preventDefault(); ev.stopPropagation(); usageList(); }, true);
   window.gymArcPush = { html: function(){
     var acc = '<div class="fv-l" style="margin-top:18px">Konto</div>' +
+      (sess && sess.email ? '<p class="nu-hint" style="margin:-2px 0 8px">Angemeldet als ' + esc2(sess.email) + '</p>' : '') +
       '<div class="st-bk"><button class="m-btn" data-gacc="pw">Passwort</button><button class="m-btn" data-gacc="out">Abmelden</button></div>' +
+      (isOwnerAcc() ? '<button class="m-btn" data-gacc="accs" style="margin-top:8px">Konten & Kosten</button>' : '') +
       '<div class="fv-l" style="margin-top:18px">Claude</div><button class="ga-use" data-guse="1"><span id="gaUse">' + usageText(usageCache()) + '</span><i aria-label="Anfragen anzeigen">ⓘ</i></button>';
     setTimeout(usageLoad, 0);
     return acc + healthHTML() + pushHTML();
@@ -837,5 +919,5 @@
       return null;   // downloads usw.: die App nutzt dann den normalen Browser-Download
     }
   };
-  window.gymArcLogout = function(){ store(null); location.reload(); };
+  window.gymArcLogout = function(){ store(null); try{ localStorage.removeItem("ga-usage"); localStorage.removeItem("ga-health-ok"); }catch(_){} location.reload(); };
 })();

@@ -1,6 +1,7 @@
 // Gym Arc – Server-Funktion "claude" (Supabase Edge Function)
 // Leitet Anfragen der App an die Anthropic-API weiter. Der API-Schlüssel liegt nur hier als Secret.
 // Benötigte Secrets: ANTHROPIC_API_KEY, ALLOWED_EMAIL (deine E-Mail; mehrere mit Komma trennen)
+// Weitere Konten: Freigabe + Monatslimit in der Tabelle public.app_access (setzt der Besitzer in der App unter Einstellungen → Konten & Kosten)
 // Optional: MODEL_QUICK, MODEL_DEFAULT (Modellnamen überschreiben)
 
 const CORS = {
@@ -60,6 +61,18 @@ async function logUsage(userId: string, model: string, u: Record<string, number>
   } catch (_) { /* Zählen darf nie die Antwort verhindern */ }
 }
 
+const OWNER_UID = "b489f427-ee44-495c-bdb4-858ae3c9773f";
+// Monatsanfang in deutscher Zeit (wie die Übersicht in der App)
+function monthStartBerlin() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit" }).formatToParts(now);
+  const y = +parts.find((p) => p.type === "year")!.value, m = +parts.find((p) => p.type === "month")!.value;
+  // 1. des Monats 00:00 Berlin = 23:00 bzw. 22:00 UTC am Vortag
+  const guess = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+  const off = new Date(guess.toLocaleString("en-US", { timeZone: "Europe/Berlin" })).getTime() - new Date(guess.toLocaleString("en-US", { timeZone: "UTC" })).getTime();
+  return new Date(guess.getTime() - off);
+}
+
 const SYS_JSON =
   "Du bist der Assistent einer persönlichen Trainings- und Ernährungs-App. Antworte ausschließlich mit gültigem JSON genau im verlangten Format – ohne Erklärungen, ohne Markdown, ohne Codeblöcke.";
 const SYS_TEXT = "Du bist der Assistent einer persönlichen Trainings- und Ernährungs-App. Antworte knapp auf Deutsch.";
@@ -68,15 +81,28 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ code: "method", message: "Nur POST" }, 405);
   try {
-    // 1) Anmeldung prüfen: nur deine E-Mail darf Claude nutzen
+    // 1) Anmeldung prüfen: Besitzer immer, andere Konten nur mit Freigabe
     const auth = req.headers.get("Authorization") || "";
     const apikey = req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "";
     const u = await fetch(Deno.env.get("SUPABASE_URL") + "/auth/v1/user", { headers: { Authorization: auth, apikey } });
     if (!u.ok) return json({ code: "not_granted", message: "Nicht angemeldet" }, 401);
     const user = await u.json();
     const allowed = (Deno.env.get("ALLOWED_EMAIL") || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
-    if (!allowed.length || !allowed.includes(String(user.email || "").toLowerCase())) {
-      return json({ code: "not_granted", message: "Kein Zugriff" }, 403);
+    const isOwner = user.id === OWNER_UID || allowed.includes(String(user.email || "").toLowerCase());
+    if (!isOwner) {
+      // Andere Konten: nur mit Freigabe und innerhalb ihres Monatslimits
+      const SR = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+      const H = { apikey: SR, Authorization: "Bearer " + SR };
+      const base = Deno.env.get("SUPABASE_URL") + "/rest/v1/";
+      const ar = await fetch(base + "app_access?select=allowed,monthly_limit_usd&user_id=eq." + user.id, { headers: H });
+      const acc = ar.ok ? (await ar.json())[0] : null;
+      if (!acc || !acc.allowed) return json({ code: "not_granted", message: "Claude ist für dein Konto noch nicht freigeschaltet." }, 403);
+      const start = monthStartBerlin().toISOString();
+      const ur = await fetch(base + "claude_usage?select=cost_usd&user_id=eq." + user.id + "&created_at=gte." + encodeURIComponent(start), { headers: H });
+      const spent = ur.ok ? (await ur.json()).reduce((a: number, x: { cost_usd: number }) => a + (+x.cost_usd || 0), 0) : 0;
+      if (spent >= (+acc.monthly_limit_usd || 0)) {
+        return json({ code: "rate_limited", message: "Monatslimit für Claude erreicht (" + (+acc.monthly_limit_usd).toFixed(2) + " $)." }, 429);
+      }
     }
 
     // 2) Anfrage prüfen

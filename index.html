@@ -1089,6 +1089,8 @@ body.kp-open #histsheet .sheet-scroll{padding-bottom:340px}
 .fd-prev{display:flex;justify-content:center;margin:6px 0 10px}.fd-prev img{width:120px;height:120px;border-radius:16px;object-fit:cover}
 body.ob-mode .tabbar{display:none}
 .ob .h-sub{line-height:1.45;margin-bottom:18px}
+.w-empty{background:var(--surface);border-radius:var(--r-lg);padding:18px;margin-bottom:12px}.w-empty b{display:block;font-size:17px;margin-bottom:4px}.w-empty span{color:var(--muted);font-size:14px;line-height:1.45}
+.wb-ini{font-weight:800;font-size:22px;color:#fff;letter-spacing:-.02em}
 .ob-opt{display:block;width:100%;text-align:left;background:var(--surface);border-radius:18px;padding:16px 18px;margin-bottom:10px}
 .ob-opt b{display:block;font-size:17px}.ob-opt span{display:block;font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
 .ob-text textarea{width:100%;height:110px;border:0;border-radius:12px;background:var(--tile);padding:10px;font:inherit;font-size:16px;color:var(--ink);margin:10px 0 0;resize:vertical}
@@ -1558,7 +1560,7 @@ function heroLoop(ts){
 function startHero(){ if(!heroRAF) heroRAF=requestAnimationFrame(heroLoop); }
 
 /* ================= Store ================= */
-const LS_KEY = "pp-trainer-v1";
+const LS_KEY = "pp-trainer-v1" + (window.GA_LS_SUFFIX||"");   // eigene Ablage je Konto (eigenständige Version)
 let S = { history:[], active:null, settings:{rest:180}, deleted:[], body:[] };
 try{ const raw = localStorage.getItem(LS_KEY); if(raw){ const p = JSON.parse(raw); S = Object.assign(S,p); S.settings = Object.assign({rest:180}, p.settings||{}); } }catch(e){}
 if(!S.mode) S.mode = (S.history.length || (S.imported && S.imported.all)) ? "owner" : "pending";
@@ -1644,7 +1646,7 @@ async function initCloud(){
     // lokale, noch nicht hochgeladene Workouts hochladen
     const remoteIds = new Set(snap.docs.map(d=>d.id));
     for(const h of S.history){ if(!remoteIds.has("w"+h.id)){ await pushHistory(h); } }
-    if(remoteSettings && !localStorage.getItem(LS_KEY+"-setlocal")){ if(remoteSettings.rest) S.settings.rest = remoteSettings.rest; if(remoteSettings.plan) S.settings.plan=remoteSettings.plan; ["workouts","days","planName","profile","resets"].forEach(k=>{ if(remoteSettings[k]) S.settings[k]=remoteSettings[k]; }); if(remoteSettings.workouts && remoteSettings.workouts.length) S.setupDone=true; if(remoteSettings.customEx) S.settings.customEx=remoteSettings.customEx; if(remoteSettings.plan||remoteSettings.customEx) buildPlan(); if(remoteSettings.order){ S.settings.order=remoteSettings.order; applyOrder(); } changed=true; }
+    if(remoteSettings && !localStorage.getItem(LS_KEY+"-setlocal")){ if(remoteSettings.rest) S.settings.rest = remoteSettings.rest; if(remoteSettings.plan) S.settings.plan=remoteSettings.plan; ["workouts","days","planName","profile","resets"].forEach(k=>{ if(remoteSettings[k]) S.settings[k]=remoteSettings[k]; }); if(Array.isArray(remoteSettings.workouts)) S.setupDone=true; if(remoteSettings.customEx) S.settings.customEx=remoteSettings.customEx; if(remoteSettings.plan||remoteSettings.customEx) buildPlan(); if(remoteSettings.order){ S.settings.order=remoteSettings.order; applyOrder(); } changed=true; }
     swapLegsOnce(); seedRecipesOnce(); try{ seedKantineOnce(); }catch(_){ } try{ favLabelFix(); }catch(_){ } try{ recSyncAll(); }catch(_){ } seedPhotoRefsOnce();
     const remoteDone = remoteActive && S.history.some(h=>h.start===remoteActive.start || String(h.id)===String(remoteActive.start));
     if(remoteDone){ remoteActive=null; userCol().doc("active").delete().catch(()=>{}); }
@@ -1822,18 +1824,18 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
     const moved = PLAN.days.includes(d0.getDay()) && coveredByMove(d0);
     const tday = PLAN.days.includes(d0.getDay()) && !moved;
     const missed = tday && !h && i<day;
-    week += `<div class="week-day ${tday||(h&&!PLAN.days.includes(d0.getDay()))?"tday":"rday"}">${names[i]}<div class="dot ${h?"done":""} ${i===day?"today":""} ${missed?"missed":""}">${h? ({push:"Ps",pull:"Pl"}[h.workoutId]||"✓") : d0.getDate()}</div></div>`;
+    week += `<div class="week-day ${tday||(h&&!PLAN.days.includes(d0.getDay()))?"tday":"rday"}">${names[i]}<div class="dot ${h?"done":""} ${i===day?"today":""} ${missed?"missed":""}">${h? ({push:"Ps",pull:"Pl"}[h.workoutId]||((W(h.workoutId)||{}).name||"✓").slice(0,2)) : d0.getDate()}</div></div>`;
   }
   const doneThisWeek = S.history.filter(x=>x.start>=monday.getTime()).length;
   // Nächstes Workout: abwechselnd zum zuletzt trainierten
   const lastH = S.history[0];
-  const nextW = lastH ? (PLAN.workouts.find(x=>x.id!==lastH.workoutId)||PLAN.workouts[0]) : PLAN.workouts[0];
+  const nextW = (lastH ? (PLAN.workouts.find(x=>x.id!==lastH.workoutId)||PLAN.workouts[0]) : PLAN.workouts[0]) || null;
   const movedToday = coveredByMove(now);
   const todayIsT = PLAN.days.includes(now.getDay()) && !movedToday;
   const doneToday = S.history.some(x=>new Date(x.start).toDateString()===now.toDateString());
   let nd = new Date(now); for(let k=1;k<=8;k++){ nd = new Date(now); nd.setDate(now.getDate()+k); if(PLAN.days.includes(nd.getDay()) && !coveredByMove(nd)) break; }
   const nextDayTxt = (()=>{ const diff=Math.round((new Date(nd.toDateString())-new Date(now.toDateString()))/864e5); return diff===1?"morgen":WEEKDAYS[nd.getDay()]; })();
-  const todayLine = doneToday ? `Heute erledigt. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`
+  const todayLine = !nextW ? (PLAN.workouts.length?"":"Noch kein Training angelegt.") : !PLAN.days.length ? `Lege unter <b>Zahnrad → Trainingstage</b> fest, an welchen Tagen du trainierst.` : doneToday ? `Heute erledigt. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`
     : todayIsT ? ""
     : movedToday ? `Heute frei – schon vorgezogen. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`
     : `Heute Ruhetag. Nächstes Training ${nextDayTxt}: <b>${nextW.name}</b>`;
@@ -1853,7 +1855,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
     <div class="section-t">Workouts</div>
     ${PLAN.workouts.map(w=>{
       const ld = lastWorkoutDate(w.id);
-      const runW = S.active && S.active.workoutId; const hl = runW ? w.id===runW : w.id===nextW.id;
+      const runW = S.active && S.active.workoutId; const hl = runW ? w.id===runW : !!nextW && w.id===nextW.id;
       return `<button class="w-card ${hl?"next":""}" data-act="preview" data-w="${w.id}">
         <div class="w-badge" style="--wb:${wColor(w)}">${wIcon(w)}</div>
         <div><div class="w-name">${w.name}${hl&&!runW?`<span class="nx">Als Nächstes</span>`:""}</div>
@@ -1861,6 +1863,8 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){}
         <div class="w-last">${ld? "Zuletzt "+relDay(ld).replace(/^(Heute|Gestern)$/,m=>m.toLowerCase())+(S.history.find(x=>x.workoutId===w.id).score? ", "+S.history.find(x=>x.workoutId===w.id).score.score+" %":"") : "Noch nicht trainiert"}</div></div>
         <span class="chev">›</span></button>`;
     }).join("")}
+    ${!PLAN.workouts.length?`<div class="w-empty"><b>Noch keine Trainings</b><span>Lege dein erstes Training an, z. B. „Push“, „Oberkörper“ oder „Ganzkörper“, und füge dann die Übungen hinzu.</span></div>`:""}
+    ${S.mode!=="owner"?`<button class="ed-add" data-act="wNew">+ Training anlegen</button>`:""}
   </div>`;
   renderTabbar();
   renderResume();
@@ -1887,7 +1891,7 @@ function wColorOld(w){ const id=(w&&w.id||"")+"", n=((w&&w.name)||"").toLowerCas
   if(id==="pull"||n.includes("pull")) return "#0EA5A0";
   if(/bein|leg/.test(n)) return "#F97316";
   const P=["#8B5CF6","#E5484D","#0EA5A0","#F97316"]; let s=0; for(const c of id) s+=c.charCodeAt(0); return P[s%P.length]; }
-function wIcon(w){ const e=w&&w.exercises&&w.exercises[0]; if(!e) return "";
+function wIcon(w){ const e=w&&w.exercises&&w.exercises[0]; if(!e) return `<span class="wb-ini">${esc(((w&&w.name)||"?").trim().slice(0,2))}</span>`;
   const fd=FIG[e.id]||FIG[FIG_ALIAS[e.id]]; const t=e.id==="lz"?0:(fd&&fd.thumbT!=null?fd.thumbT:1);
   return `<span class="wb-fig">${figSVG(e.id,t)}</span>`; }
 /* Voraussichtliches Trainingsende: offene Sätze × (Satzdauer + Pause der Übung), kalibriert an deinen bisherigen Trainingszeiten */
@@ -3245,6 +3249,38 @@ function buildPlan(){
   // eigene Übungen: Muskelzuordnung für Volumen
   Object.values(S.settings.customEx||{}).forEach(c=>{ if(!EX_MUSCLES[c.id]) EX_MUSCLES[c.id]={[c.muscle]:1}; });
 }
+/* Eigene Trainings anlegen, umbenennen, löschen (für alle Konten außer dem Besitzer-Plan) */
+function wEditModal(wid){
+  const w=wid?(S.settings.workouts||[]).find(x=>x.id===wid):null; UI.wEdit=wid||null;
+  modal(`<h3>${w?"Training umbenennen":"Neues Training"}</h3>
+    <label class="nu-f" style="margin-bottom:12px"><span>Name</span><div><input id="wName" maxlength="24" value="${w?esc(w.name):""}" placeholder="z. B. Push, Oberkörper, Ganzkörper A" style="font-size:18px"></div></label>
+    ${w?"":`<div class="fv-l">Vorschläge</div><div class="fv-row">${["Push","Pull","Beine","Oberkörper","Unterkörper","Ganzkörper A","Ganzkörper B"].filter(n=>!(S.settings.workouts||[]).some(x=>x.name===n)).map(n=>`<button class="fv-chip" data-act="wPick" data-n="${n}"><b>${n}</b></button>`).join("")}</div>`}
+    <button class="m-btn pri" data-act="wSave">${w?"Speichern":"Anlegen & Übungen wählen"}</button>`);
+  setTimeout(()=>{ const i=$("wName"); if(i && !w) i.focus(); },60);
+}
+document.addEventListener("click", ev=>{ const b=ev.target.closest && ev.target.closest("[data-act=wPick]"); if(!b) return; const i=$("wName"); if(i) i.value=b.dataset.n; });
+function wSave(){
+  const name=(($("wName")||{}).value||"").trim(); if(!name){ toast("Bitte einen Namen eingeben"); return; }
+  S.settings.workouts=S.settings.workouts||[]; S.settings.plan=S.settings.plan||{};
+  let id=UI.wEdit;
+  if(id){ const w=S.settings.workouts.find(x=>x.id===id); if(w) w.name=name; }
+  else { id="w"+Date.now().toString(36); S.settings.workouts.push({id, name, color:WCOLORS[S.settings.workouts.length%WCOLORS.length]}); S.settings.plan[id]=[];
+    if(!S.settings.days || !S.settings.days.length){ /* Trainingstage später in den Einstellungen */ } }
+  try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
+  buildPlan(); saveLocal(); saveSettingsRemote(); closeModal(); renderHome();
+  if(UI.wEdit){ toast("Umbenannt"); if(UI.preview===id) renderPreview(); }
+  else { openPreview(id); editStart(id); editAddModal(); }
+  UI.wEdit=null;
+}
+function wDelAsk(wid){ const w=W(wid); if(!w) return;
+  modal(`<h3>„${esc(w.name)}“ löschen?</h3><p>Der Plan dieses Trainings wird entfernt. Bereits absolvierte Trainings bleiben im Verlauf.</p>
+    <button class="m-btn red" data-act="wDelGo" data-w="${wid}">Endgültig löschen</button><button class="m-btn" data-act="closeModal">Abbrechen</button>`); }
+function wDel(wid){
+  S.settings.workouts=(S.settings.workouts||[]).filter(x=>x.id!==wid);
+  if(S.settings.plan) delete S.settings.plan[wid]; if(S.settings.order) delete S.settings.order[wid];
+  try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
+  UI.edit=null; buildPlan(); saveLocal(); saveSettingsRemote(); closeModal(); try{ closePreview(); }catch(_){} renderHome(); toast("Training gelöscht");
+}
 function editStart(wid){
   const w=W(wid);
   UI.edit={wid, list:w.exercises.map(e=>({id:e.id, sets:e.sets, reps:e.reps, repsMax:e.repsMax||null, rest:e.rest||S.settings.rest}))};
@@ -3300,7 +3336,8 @@ function renderEditPreview(w){
       <div style="height:14px"></div>
       ${editRows()}
       <button class="ed-add" data-act="edAddOpen">+ Übung hinzufügen</button>
-      <button class="ghost-btn" style="color:var(--muted)" data-act="edReset">Auf Standardplan zurücksetzen</button>
+      ${S.mode==="owner"?`<button class="ghost-btn" style="color:var(--muted)" data-act="edReset">Auf Standardplan zurücksetzen</button>`
+        :`<div class="st-bk" style="margin-top:14px"><button class="m-btn" data-act="wRename" data-w="${w.id}">Umbenennen</button><button class="m-btn red" data-act="wDel" data-w="${w.id}">Training löschen</button></div>`}
     </div>`;
 }
 
@@ -5390,6 +5427,7 @@ function renderOnboarding(){
     <div class="ob-opt ob-text"><b>Text einfügen</b><span>Kopierte Notizen oder Tabellen</span>
       <textarea id="obText" placeholder="z. B.&#10;12.11. Push&#10;Bankdrücken 60kg 10/9/8&#10;…"></textarea>
       <button class="m-btn pri" data-act="obText">Text auswerten</button></div>
+    <button class="ob-opt" data-act="obEmpty"><b>Leer starten</b><span>Ohne Import beginnen – Trainings, Übungen und Ziele selbst anlegen</span></button>
     <div id="obStatus" class="ob-status"></div>
   </div>`;
 }
@@ -5876,6 +5914,13 @@ document.addEventListener("click", ev=>{
     case "xmRest": { setExRest(b.dataset.ex, +b.dataset.s); toast("Pause "+fmtTime(+b.dataset.s)); exMenu(b.dataset.ex); if(UI.workoutOpen) renderWorkout(); break; }
     case "obFile": { const f=$("obFile"); if(f) f.click(); break; }
     case "obImgs": { const f=$("obImgs"); if(f) f.click(); break; }
+    case "obEmpty": { S.setupDone=true; S.settings.workouts=[]; S.settings.plan={}; S.settings.order={}; S.settings.days=S.settings.days||[]; S.settings.planName=S.settings.planName||"Mein Plan";
+      try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} buildPlan(); saveLocal(); saveSettingsRemote(); UI.tab="train"; renderAll(); toast("Los geht's – lege dein erstes Training an"); break; }
+    case "wNew": wEditModal(null); break;
+    case "wRename": wEditModal(b.dataset.w); break;
+    case "wSave": wSave(); break;
+    case "wDel": wDelAsk(b.dataset.w); break;
+    case "wDelGo": wDel(b.dataset.w); break;
     case "obText": { const t=($("obText")||{}).value||""; if(t.trim().length<10){ toast("Bitte zuerst Text einfügen"); break; } obRun("text", t); break; }
     case "obDay": { const P=UI.setup; if(!P) break; const d=+b.dataset.d; P.days = P.days.includes(d)? P.days.filter(x=>x!==d) : P.days.concat([d]); renderHome(); break; }
     case "obApply": obApply(); break;

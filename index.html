@@ -297,7 +297,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .co-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-right:44px}.co-log:empty{display:none}.co-log{max-height:52vh;overflow-y:auto;margin-bottom:10px}
 .co-tips{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.co-tips button{background:var(--tile);color:var(--ink);border-radius:14px;padding:11px 12px;text-align:left;font-weight:600;font-size:14px}
 .co-in{display:grid !important;grid-template-columns:minmax(0,1fr) 52px;gap:8px}.co-in input{border:0;border-radius:14px;background:var(--tile);color:var(--ink);padding:0 14px;font:inherit;font-size:16px;min-height:52px;width:100%;box-sizing:border-box}.co-in .m-btn{margin:0;padding:0;font-size:20px;width:52px}
-.fe-save2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.fe-save2 .m-btn{margin:0}
+.fe-save2{display:grid;grid-template-columns:1fr;gap:8px;margin-top:8px}.fe-save2 .m-btn{margin:0}
 
 .ck-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warm);vertical-align:middle;margin-left:4px}
 .st-bk{display:grid;grid-template-columns:1fr 1fr;gap:8px}.st-bk .m-btn{margin:0;font-size:14px}
@@ -375,7 +375,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .fa-two span svg{width:17px;height:17px}
 .fa-two b{flex:1;font-size:14px;font-weight:700;color:var(--ink)}
 .fa-two em{font-style:normal;font-size:12px;font-weight:700;color:var(--muted)}
-.fa-two{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fa-two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .fa-two button{flex-direction:column;align-items:center;text-align:center;gap:5px;padding:12px 4px;min-width:0}
 .fa-two b{flex:none;font-size:13.5px}
 .fa-list{background:var(--tile);border-radius:14px;overflow:hidden}
@@ -4124,7 +4124,7 @@ function foodAddMenu(view){
       <button class="m-btn pri" data-act="foodText">Nährwerte ermitteln</button>`); return; }
   modal(`<h3>${ml} hinzufügen</h3>
     <div class="fq"><input id="fqIn" type="search" placeholder="Schon gegessen suchen" autocomplete="off" enterkeyhint="search"><div id="fqRes"></div></div>
-    <div class="fa-two"><button data-act="faView" data-v="fav"><span>★</span><b>Favoriten</b><em>${favList().length}</em></button><button data-act="faView" data-v="rec"><span>${svgIc("pot")}</span><b>Rezepte</b><em>${recList().length}</em></button><button data-act="faView" data-v="kan"><span>${svgIc("plate")}</span><b>Kantine</b><em>${kanList().length}</em></button></div>
+    <div class="fa-two"><button data-act="faView" data-v="fav"><span>★</span><b>Favoriten</b><em>${favList().length}</em></button><button data-act="faView" data-v="rec"><span>${svgIc("pot")}</span><b>Rezepte</b><em>${recList().length}</em></button></div>
     <button class="m-btn pri" data-act="faView" data-v="text">Mit Claude: Foto oder Beschreibung</button>
     <div class="fe-save2 fa-bc"><button class="m-btn" data-act="bcScan" data-to="food">${BC_IC}Barcode</button><button class="m-btn" data-act="foodManual">Selbst eintragen</button></div>`);
 }
@@ -4469,8 +4469,8 @@ function recPick(id, por){
 /* ================= Kochen: Rezepte, Einkaufsliste, Cut-Empfehlungen ================= */
 const perP = (r,k) => Math.round((+r[k]||0)/(r.servings||1));
 function renderCooking(){
-  const t=UI.ckTab||"rec";
-  const seg=`<div class="ck-seg">${[["rec","Rezepte"],["fav","Favoriten"],["kan","Kantine"]].map(([k,l])=>`<button class="${t===k?"on":""}" data-act="ckTab" data-t="${k}">${l}</button>`).join("")}</div>`;
+  const t=UI.ckTab==="fav"?"fav":"rec";
+  const seg=`<div class="ck-seg">${[["rec","Rezepte"],["fav","Favoriten"]].map(([k,l])=>`<button class="${t===k?"on":""}" data-act="ckTab" data-t="${k}">${l}</button>`).join("")}</div>`;
   if(t==="kan"){ const K=kanList();
     return `<div class="ck-h">${seg}<button class="pill-btn" data-act="kanEdit" data-id="">+ Neu</button></div>
       ${K.length? `<div class="ck-list">${K.map(g=>`<button class="ck-card" data-act="kanEdit" data-id="${g.id}">${foodIc(g,"lunch")}<div class="ck-t"><b>${esc(g.name)}</b><span>${g.lab&&g.lab.length?g.lab.map(c=>`${r1(c.g)} g ${esc(c.name)}`).join(" · "):`E ${g.p} · K ${g.c} · F ${g.f}`}</span></div><em>${g.kcal}<small>kcal</small></em></button>`).join("")}</div>`
@@ -5338,7 +5338,7 @@ function foodEditor(it, meal, idx, msg){
     ${it.ean&&!it.comp?`<p class="nu-hint">${it.eanOwn?"Deine korrigierten Werte für diesen Barcode.":"Werte aus Open Food Facts (Community-Daten, teils veraltet) – kurz mit der Packung vergleichen. Wenn du sie änderst, merkt sich die App das für diesen Barcode."}</p>`:""}
     ${it.ai&&!it.label&&!it.comp?`<p class="nu-hint">Schätzung von Claude – bitte prüfen und bei Bedarf anpassen.</p>`:""}${it.label?`<div class="fd-ok">✓ Von der Nährwerttabelle abgelesen</div>`:""}
     <button class="m-btn pri" data-act="foodSave">${idx<0?"Hinzufügen":"Speichern"}</button>
-    <div class="fe-save2"><button class="m-btn" data-act="favToggle">${isFav(it)?"★ Favorit":"☆ Favorit"}</button><button class="m-btn" data-act="kanSave">${kanList().some(x=>(x.name||"").toLowerCase()===(it.name||"").toLowerCase())?"✓ Kantine":"🍽 Kantine"}</button></div>
+    <div class="fe-save2"><button class="m-btn" data-act="favToggle">${isFav(it)?"★ Favorit":"☆ Favorit"}</button></div>
 
     ${idx>=0?`<button class="m-btn red" data-act="foodDel">Löschen</button>`:""}`);
 }

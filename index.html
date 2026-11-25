@@ -820,6 +820,8 @@ html,body{overflow-x:clip}
 .wc-i em.up{color:var(--good)}.wc-i em.down{color:var(--bad)}.wc-i em.same{color:var(--muted)}
 .lib-search input{width:100%;height:46px;border:0;border-radius:14px;background:var(--surface);padding:0 16px;font-size:16px;color:var(--ink);outline:none;-webkit-appearance:none}
 .lib-search input:focus{box-shadow:inset 0 0 0 2px var(--accent)}
+.lib-search{display:flex;gap:8px}.lib-search input{flex:1;min-width:0}
+.lib-plus{flex:0 0 46px;height:46px;border-radius:14px;background:var(--surface);color:var(--accent);font-size:28px;font-weight:500;line-height:1;display:flex;align-items:center;justify-content:center}
 .lib-cats{display:flex;gap:6px;overflow-x:auto;margin:12px -20px 14px;padding:0 20px;scrollbar-width:none}
 .lib-cats::-webkit-scrollbar{display:none}
 .lib-cats button{flex-shrink:0;background:var(--surface);color:var(--muted);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:600}
@@ -5727,8 +5729,7 @@ function renderLibrary(){
   UI.libCat = UI.libCat || "Meine";
   return `<div class="home lib">
     <div class="h-title">Übungen</div><div class="h-sub">${libAll().length} Übungen</div>
-    <button class="ed-add lib-new" data-act="libNew">+ Eigene Übung</button>
-    <div class="lib-search"><input id="libQ" type="search" placeholder="Übung suchen" value="${esc(UI.libQ||"")}" autocomplete="off"></div>
+    <div class="lib-search"><input id="libQ" type="search" placeholder="Übung suchen" value="${esc(UI.libQ||"")}" autocomplete="off"><button class="lib-plus" data-act="libNew" aria-label="Eigene Übung anlegen">+</button></div>
     <div class="lib-cats">${LIB_CATS.map(c=>`<button class="${UI.libCat===c?"on":""}" data-act="libCat" data-c="${c}">${c}</button>`).join("")}</div>
     <div id="libList">${libListHTML()}</div>
   </div>`;

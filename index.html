@@ -3384,7 +3384,7 @@ function editRows(){
         <div class="ed-c"><span>Wdh</span><div><button data-act="edNum" data-f="reps" data-i="${i}" data-d="-1">−</button><b>${x.repsMax?`${x.reps}–${x.repsMax}`:x.reps}</b><button data-act="edNum" data-f="reps" data-i="${i}" data-d="1">+</button></div></div>
         <div class="ed-c"><span>Pause</span><div><button class="ed-rest" data-act="edRest" data-i="${i}">${fmtTime(x.rest)}</button></div></div>
       </div>
-      <button class="ed-range ${x.repsMax?"on":""}" data-act="edRange" data-i="${i}">${x.repsMax?"Wdh-Bereich ("+x.reps+"–"+x.repsMax+") aus":"Als Wdh-Bereich (z. B. 12–15)"}</button>
+      ${x.repsMax?`<button class="ed-range on" data-act="edRange" data-i="${i}">Wdh-Bereich (${x.reps}–${x.repsMax}) aus</button>`:""}
       ${x.alt && exDef(x.alt) ? `<div class="ed-alt"><span>Alternative:</span><b>${esc(exDef(x.alt).name)}</b><button data-act="edAltDel" data-i="${i}" aria-label="Alternative entfernen">×</button></div>`
         : `<button class="ed-range" data-act="edAltOpen" data-i="${i}">+ Alternative hinzufügen</button>`}
     </div>`; }).join("");

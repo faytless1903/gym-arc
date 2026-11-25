@@ -509,7 +509,7 @@
     else if(k === "out"){ window.gymArcLogout(); }
     else if(k === "accs"){ accList(); }
     else if(k === "accAllow"){ accSet(b.getAttribute("data-u"), b.getAttribute("data-on") !== "1", +b.getAttribute("data-lim")); }
-    else if(k === "accLim"){ accSet(b.getAttribute("data-u"), true, +b.getAttribute("data-lim")); }
+    else if(k === "accLim"){ accSet(b.getAttribute("data-u"), true, +b.getAttribute("data-lim"), true); }
     else if(k === "accBlock"){ b.textContent = "Wirklich sperren? Nochmal tippen"; b.setAttribute("data-gacc", "accBlockGo"); b.classList.add("go"); }
     else if(k === "accBlockGo"){ b.disabled = true; accBlock(b.getAttribute("data-u"), true); }
     else if(k === "accUnblock"){ b.disabled = true; accBlock(b.getAttribute("data-u"), false); }
@@ -528,37 +528,55 @@
   }
   var usd = function(v){ return (+v || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $"; };
   var dDE = function(s){ return s ? new Date(s).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "–"; };
+  var ACC = { all: null };
+  function accCard(x, mon, prev){
+    var own = !!x.is_owner, on = own || !!x.allowed, lim = +x.monthly_limit_usd || 2;
+    return '<div class="ga-acc" data-uid="' + x.user_id + '"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + (own ? ' <span class="nx">Du</span>' : '') + '</b><span>Konto seit ' + dDE(x.created_at) + ' · zuletzt aktiv ' + dDE(x.last_sign_in_at) + '</span></div>' +
+      '<div class="ga-acc-n"><div><span>' + mon + '</span><b>' + usd(x.cost_month) + '</b><em>' + (+x.n_month || 0) + ' Anfragen</em></div><div><span>' + prev + '</span><b>' + usd(x.cost_prev) + '</b><em>' + (+x.n_prev || 0) + ' Anfragen</em></div><div><span>Gesamt</span><b>' + usd(x.cost_total) + '</b><em>&nbsp;</em></div></div>' +
+      (own ? '' : '<div class="gs-row"><span>Claude-Funktionen</span><button class="gs-sw' + (on ? ' on' : '') + '" data-gacc="accAllow" data-u="' + x.user_id + '" data-on="' + (on ? 1 : 0) + '" data-lim="' + lim + '" role="switch" aria-checked="' + on + '" aria-label="Claude freigeben"></button></div>' +
+        (on ? '<div class="ga-lim"><span>Monatslimit</span>' + [1, 2, 5].map(function(v){ return '<button class="' + (lim === v ? 'on' : '') + '" data-gacc="accLim" data-u="' + x.user_id + '" data-lim="' + v + '">' + v + ' $</button>'; }).join("") + '</div>' : '') +
+        '<button class="ga-blk" data-gacc="accBlock" data-u="' + x.user_id + '">Konto sperren</button>') +
+      '</div>';
+  }
+  function accRender(){
+    var all = ACC.all || [];
+    var L = all.filter(function(x){ return !x.blocked; }), B = all.filter(function(x){ return !!x.blocked; });
+    var mon = new Date().toLocaleDateString("de-DE", { month: "long" }), prev = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("de-DE", { month: "long" });
+    var sum = L.reduce(function(a, x){ return a + (+x.cost_month || 0); }, 0), sumP = L.reduce(function(a, x){ return a + (+x.cost_prev || 0); }, 0);
+    var box = document.getElementById("modalbox"), top = box ? box.scrollTop : 0, blkOpen = !!(document.getElementById("gaBlk") && !document.getElementById("gaBlk").hidden);
+    var html = ('<h3>Konten & Kosten</h3><p class="pc-sub" style="margin:-4px 0 12px">Claude gesamt · ' + mon + ': ' + usd(sum) + ' · ' + prev + ': ' + usd(sumP) + '</p>' +
+      L.map(function(x){ return accCard(x, mon, prev); }).join("") +
+      (B.length ? '<button class="ga-blkt" data-gacc="accShowBlocked" data-t="Gesperrte Konten (' + B.length + ')">' + (blkOpen ? "▾ " : "▸ ") + 'Gesperrte Konten (' + B.length + ')</button><div id="gaBlk"' + (blkOpen ? '' : ' hidden') + '>' +
+        B.map(function(x){ return '<div class="ga-acc ga-acc-off"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + '</b><span>Konto seit ' + dDE(x.created_at) + ' · gesperrt</span></div>' +
+          '<button class="ga-blk" data-gacc="accUnblock" data-u="' + x.user_id + '">Entsperren</button></div>'; }).join("") + '</div>' : '') +
+      '<p class="nu-hint" style="margin-top:10px">Gesperrte Konten verschwinden aus der Liste, werden sofort abgemeldet und kommen nicht mehr an die App. Ihre Daten bleiben gespeichert. Neue Konten können Claude erst nutzen, wenn du sie hier freigibst. Das Limit gilt pro Monat; dein Anthropic-Limit gilt zusätzlich für alle zusammen.</p>' +
+      '<button class="m-btn" data-act="settings" style="margin-top:8px">Zurück</button>');
+    // Liste schon offen → nur den Inhalt tauschen (ohne Animation und ohne nach oben zu springen)
+    var mt = box && box.querySelector(".m-top");
+    if(mt && box.querySelector(".ga-acc")){ box.innerHTML = mt.outerHTML + html; box.scrollTop = top; } else modal(html);
+  }
   async function accList(){
     modal('<h3>Konten & Kosten</h3><p class="nu-hint">Wird geladen …</p>');
-    try{
-      var all = await rpc("ga_accounts") || [];
-      var L = all.filter(function(x){ return !x.blocked; }), B = all.filter(function(x){ return !!x.blocked; });
-      var mon = new Date().toLocaleDateString("de-DE", { month: "long" }), prev = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("de-DE", { month: "long" });
-      var sum = L.reduce(function(a, x){ return a + (+x.cost_month || 0); }, 0), sumP = L.reduce(function(a, x){ return a + (+x.cost_prev || 0); }, 0);
-      modal('<h3>Konten & Kosten</h3><p class="pc-sub" style="margin:-4px 0 12px">Claude gesamt · ' + mon + ': ' + usd(sum) + ' · ' + prev + ': ' + usd(sumP) + '</p>' +
-        L.map(function(x){
-          var own = !!x.is_owner, on = own || !!x.allowed, lim = +x.monthly_limit_usd || 2;
-          return '<div class="ga-acc"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + (own ? ' <span class="nx">Du</span>' : '') + '</b><span>Konto seit ' + dDE(x.created_at) + ' · zuletzt aktiv ' + dDE(x.last_sign_in_at) + '</span></div>' +
-            '<div class="ga-acc-n"><div><span>' + mon + '</span><b>' + usd(x.cost_month) + '</b><em>' + (+x.n_month || 0) + ' Anfragen</em></div><div><span>' + prev + '</span><b>' + usd(x.cost_prev) + '</b><em>' + (+x.n_prev || 0) + ' Anfragen</em></div><div><span>Gesamt</span><b>' + usd(x.cost_total) + '</b><em>&nbsp;</em></div></div>' +
-            (own ? '' : '<div class="gs-row"><span>Claude-Funktionen</span><button class="gs-sw' + (on ? ' on' : '') + '" data-gacc="accAllow" data-u="' + x.user_id + '" data-on="' + (on ? 1 : 0) + '" data-lim="' + lim + '" aria-label="Claude freigeben"></button></div>' +
-              (on ? '<div class="ga-lim"><span>Monatslimit</span>' + [1, 2, 5].map(function(v){ return '<button class="' + (lim === v ? 'on' : '') + '" data-gacc="accLim" data-u="' + x.user_id + '" data-lim="' + v + '">' + v + ' $</button>'; }).join("") + '</div>' : '') +
-              '<button class="ga-blk" data-gacc="accBlock" data-u="' + x.user_id + '">Konto sperren</button>') +
-            '</div>';
-        }).join("") +
-        (B.length ? '<button class="ga-blkt" data-gacc="accShowBlocked" data-t="Gesperrte Konten (' + B.length + ')">▸ Gesperrte Konten (' + B.length + ')</button><div id="gaBlk" hidden>' +
-          B.map(function(x){ return '<div class="ga-acc ga-acc-off"><div class="ga-acc-h"><b>' + esc2(x.email || "ohne E-Mail") + '</b><span>Konto seit ' + dDE(x.created_at) + ' · gesperrt</span></div>' +
-            '<button class="ga-blk" data-gacc="accUnblock" data-u="' + x.user_id + '">Entsperren</button></div>'; }).join("") + '</div>' : '') +
-        '<p class="nu-hint" style="margin-top:10px">Gesperrte Konten verschwinden aus der Liste, werden sofort abgemeldet und kommen nicht mehr an die App. Ihre Daten bleiben gespeichert. Neue Konten können Claude erst nutzen, wenn du sie hier freigibst. Das Limit gilt pro Monat; dein Anthropic-Limit gilt zusätzlich für alle zusammen.</p>' +
-        '<button class="m-btn" data-act="settings" style="margin-top:8px">Zurück</button>');
-    }catch(e){ modal('<h3>Konten & Kosten</h3><p>Konnte nicht geladen werden.</p><button class="m-btn" data-act="settings">Zurück</button>'); }
+    try{ ACC.all = await rpc("ga_accounts") || []; accRender(); }
+    catch(e){ modal('<h3>Konten & Kosten</h3><p>Konnte nicht geladen werden.</p><button class="m-btn" data-act="settings">Zurück</button>'); }
+  }
+  // Nur die eine Konto-Karte neu zeichnen – kein Neuladen der ganzen Liste
+  function accPatch(uid){
+    var x = (ACC.all || []).find(function(a){ return a.user_id === uid; }); var el = document.querySelector('.ga-acc[data-uid="' + uid + '"]'); if(!x || !el) return;
+    var mon = new Date().toLocaleDateString("de-DE", { month: "long" }), prev = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("de-DE", { month: "long" });
+    el.outerHTML = accCard(x, mon, prev);
   }
   async function accBlock(uid, block){
-    try{ await rpc("ga_set_blocked", { target: uid, block: !!block }); toast2(block ? "Konto gesperrt" : "Konto entsperrt"); accList(); }
-    catch(e){ toast2("Nicht gespeichert: " + (e.message || e.code)); accList(); }
+    try{ await rpc("ga_set_blocked", { target: uid, block: !!block }); toast2(block ? "Konto gesperrt" : "Konto entsperrt");
+      var x = (ACC.all || []).find(function(a){ return a.user_id === uid; }); if(x){ x.blocked = !!block; accRender(); } else accList(); }
+    catch(e){ toast2("Nicht gespeichert: " + (e.message || e.code)); accRender(); }
   }
-  async function accSet(uid, allow, lim){
-    try{ await rpc("ga_set_access", { target: uid, allow: !!allow, lim: lim || 2 }); toast2(allow ? "Freigegeben" : "Gesperrt"); accList(); }
-    catch(e){ toast2("Nicht gespeichert: " + (e.message || e.code)); }
+  async function accSet(uid, allow, lim, isLim){
+    var x = (ACC.all || []).find(function(a){ return a.user_id === uid; }); if(!x) return;
+    var old = { allowed: x.allowed, lim: x.monthly_limit_usd };
+    x.allowed = !!allow; x.monthly_limit_usd = lim || 2; accPatch(uid);          // sofort umschalten
+    try{ await rpc("ga_set_access", { target: uid, allow: !!allow, lim: lim || 2 }); toast2(isLim ? "Monatslimit " + (lim || 2) + " $" : allow ? "Freigegeben" : "Claude für dieses Konto aus"); }
+    catch(e){ x.allowed = old.allowed; x.monthly_limit_usd = old.lim; accPatch(uid); toast2("Nicht gespeichert: " + (e.message || e.code)); }
   }
   /* Liste der Claude-Anfragen dieses Monats (wofür, Modell, Kosten) */
   async function usageList(){

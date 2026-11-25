@@ -2625,7 +2625,7 @@ Daten (JSON):
 ${JSON.stringify(data)}
 
 Antworte NUR mit JSON in diesem Format:
-{"items":[{"id":"<id>","action":"up"|"hold"|"down"|"new","kg":<Zahl oder null>,"kurz":"<Grund in max. 35 Zeichen, z. B. Ziel geschafft oder Bis Satz 1 und 2 je 10 Wdh>","reason":"<kurze Begründung auf Deutsch, max. 140 Zeichen, nenne die konkreten Werte>"}]}`;
+{"items":[{"id":"<id>","action":"up"|"hold"|"down"|"new","kg":<Zahl oder null>,"kurz":"<Grund in max. 35 Zeichen, z. B. Ziel geschafft oder Bis Satz 1 und 2 je 10 Wdh>","reason":"<knappe Begründung auf Deutsch, max. 90 Zeichen, nenne die konkreten Werte>"}]}`;
   try{
     const res = needAi ? await sample.json(prompt, {modelTier:"default"}) : {items:[]};
     const items = {};
@@ -4689,7 +4689,7 @@ async function coachSend(q){
   const sample=await getSample();
   if(!sample){ if(w) w.remove(); add("c","Claude ist hier gerade nicht erreichbar."); C.msgs.pop(); C.busy=false; return; }
   const sys=`Du bist ein erfahrener Kraftsport- und Ernährungscoach in der App „Gym Arc“. Antworte auf Deutsch, konkret und knapp (meist 3–8 Sätze oder eine kurze Liste), mit Bezug auf die Daten unten. Rechne nach, statt zu schätzen. Keine medizinischen Diagnosen; bei Beschwerden zum Arzt raten. Wenn Daten fehlen, sag das kurz.\n\nDATEN DES NUTZERS:\n${C.ctx}`;
-  const msgs=C.msgs.slice(-12).map((m,i)=>({role:m.role, content: i===0 ? sys+"\n\nFRAGE: "+m.content : m.content}));
+  const msgs=C.msgs.slice(-9).map((m,i)=>({role:m.role, content: i===0 ? sys+"\n\nFRAGE: "+m.content : m.content}));
   if(msgs[0].role!=="user") msgs.shift();
   try{
     const res=await sample(msgs.length===1 ? msgs[0].content : msgs, {modelTier:"default", cache:false});
@@ -5103,20 +5103,24 @@ async function foodPhotoRun(file, meal, thumb, desc){
   step(desc?"Mahlzeit wird analysiert …":"Foto wird gelesen …", desc?esc(desc):"Nährwerttabelle oder Mahlzeit?");
   try{
     const blob = await nuShrink(file);
+    const MEAL_PROMPT = `Analysiere das Foto einer Mahlzeit (${MEALS.find(x=>x[0]===meal)[1]}). ${desc?`WICHTIG – Angabe des Nutzers zum Foto (hat Vorrang vor deiner Bilderkennung, genannte Mengen exakt übernehmen): """${desc}""". `:""}Erkenne die Lebensmittel, schätze realistische Portionsgrößen in Gramm (Teller ~26 cm als Referenz) und berechne die Nährwerte mit gängigen Nährwerttabellen.${photoCalib()} Antworte NUR mit JSON: {"name":"kurzer deutscher Name","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"gramm":Zahl,"komponenten":[{"name":"…","gramm":Zahl,"zubereitung":"…","suche":["…"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. Grammangaben für Makros. "gramm" = geschätztes Gesamtgewicht der Mahlzeit auf dem Foto in g. Bei einer Mahlzeit (kein Etikett) zusätzlich "komponenten": ${BLS_PROMPT_COMP} Die Gramm je Bestandteil sorgfältig am Foto schätzen. Wenn kein Essen erkennbar ist: {"name":null}.`;
+    let res=null;
     if(!desc){
-    // Schritt 1 (schnell): Nährwerttabelle direkt ablesen – oder nur feststellen, dass es eine Mahlzeit ist
-    const a = await labelRead(sample, blob);
+    // EINE Anfrage: Claude erkennt selbst, ob Nährwerttabelle oder Mahlzeit (spart die frühere zweite Bildanfrage)
+    const a = await sampleJSON(sample, `Was zeigt das Foto?
+A) Eine Nährwerttabelle oder Verpackung mit Nährwertangaben: lies die Werte EXAKT ab (nicht schätzen). Antworte NUR mit JSON: {"typ":"etikett","name":"Produktname kurz, deutsch","pro100":{"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"zucker":Zahl oder null,"ballaststoffe":Zahl oder null,"gesaettigte_fettsaeuren":Zahl oder null},"packung_g":Zahl oder null,"teile":"kurze Zusammenfassung der abgelesenen Werte"}. Werte pro 100 g bzw. 100 ml.
+B) Eine Mahlzeit oder ein Lebensmittel ohne Nährwerttabelle: ${MEAL_PROMPT} Ergänze dann im JSON "typ":"mahlzeit".`, {images:[blob], modelTier:"default"}, 45000);
     if(!live()) return;
     const P=a && a.pro100;
-    if(a && a.etikett && P && isFinite(+P.kcal) && +P.kcal>0){
+    if(a && (a.typ==="etikett"||a.etikett) && P && isFinite(+P.kcal) && +P.kcal>=0){
       const it={name:String(a.name||"Produkt").slice(0,60), parts:String(a.teile||"").slice(0,200), ai:true, label:true, p100:{kcal:+P.kcal, p:+P.protein||0, c:+P.kohlenhydrate||0, f:+P.fett||0}};
       const pk=+a.packung_g; if(pk>0) it.pack=Math.round(pk); it.grams=100; ["kcal","p","c","f"].forEach(k=>it[k]=Math.round(it.p100[k]*it.grams/100));
       foodEditor(it, meal, -1); return;
     }
+    res = a;
     }
     // Schritt 2: Mahlzeit – Bestandteile + Gramm erkennen
-    if(!desc) step("Mahlzeit wird analysiert …","Claude erkennt die Bestandteile und schätzt die Gramm.");
-    const res = await sampleJSON(sample, `Analysiere das Foto einer Mahlzeit (${MEALS.find(x=>x[0]===meal)[1]}). ${desc?`WICHTIG – Angabe des Nutzers zum Foto (hat Vorrang vor deiner Bilderkennung, genannte Mengen exakt übernehmen): """${desc}""". `:""}Erkenne die Lebensmittel, schätze realistische Portionsgrößen in Gramm (Teller ~26 cm als Referenz) und berechne die Nährwerte mit gängigen Nährwerttabellen.${photoCalib()} Antworte NUR mit JSON: {"name":"kurzer deutscher Name","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"gramm":Zahl,"komponenten":[{"name":"…","gramm":Zahl,"zubereitung":"…","suche":["…"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. Grammangaben für Makros. "gramm" = geschätztes Gesamtgewicht der Mahlzeit auf dem Foto in g. Bei einer Mahlzeit (kein Etikett) zusätzlich "komponenten": ${BLS_PROMPT_COMP} Die Gramm je Bestandteil sorgfältig am Foto schätzen. Wenn kein Essen erkennbar ist: {"name":null}.`, {images:[blob], modelTier:"default"}, 45000);
+    if(!res) res = await sampleJSON(sample, MEAL_PROMPT, {images:[blob], modelTier:"default"}, 45000);
     if(!live()) return;
     if(!res || !res.name){ foodEditor({name:"", kcal:0, p:0, c:0, f:0}, meal, -1, "Auf dem Foto war kein Essen erkennbar – trag die Werte bitte selbst ein."); return; }
     const it={name:String(res.name).slice(0,60), parts:String(compPartsText(res.komponenten)||res.teile||"").slice(0,200), kcal:Math.round(+res.kcal||0), p:Math.round(+res.protein||0), c:Math.round(+res.kohlenhydrate||0), f:Math.round(+res.fett||0), ai:true};
@@ -5689,7 +5693,7 @@ So gehst du vor:
 - Bewerte, ob der Sprung zu groß war (bei Kurzhanteln sind +25 % normal, weil es keine kleineren Stufen gibt) und ob es eine sinnvolle Zwischenlösung gibt.
 - Nenne in der Begründung die konkreten Zahlen und das nächste Wdh-Ziel.
 
-Antworte NUR mit JSON: {"action":"up"|"hold"|"down","kg":<Zahl>,"kurz":"<Grund in max. 35 Zeichen>","reason":"<Deutsch, max. 220 Zeichen>"}`;
+Antworte NUR mit JSON: {"action":"up"|"hold"|"down","kg":<Zahl>,"kurz":"<Grund in max. 35 Zeichen>","reason":"<Deutsch, max. 120 Zeichen>"}`;
   try{
     const res = await sample.json(prompt, {modelTier:"default"});
     if(!res || !["up","hold","down"].includes(res.action)) throw 0;

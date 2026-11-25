@@ -1803,7 +1803,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){} try{ activeOrphanFix();
   if(view!==renderHome.last){ renderHome.last=view; renderHome._anim=true; }
   document.body.classList.toggle("noscroll", UI.tab==="train");
   { const g=document.querySelector(".gear"); if(g) g.style.display = ""; document.body.classList.add("gear-on"); }
-  document.body.classList.toggle("has-resume", !!S.active);
+  document.body.classList.toggle("has-resume", !!(S.active && W(S.active.workoutId)));
   const needSetup = S.mode==="pending" || (S.mode==="user" && !S.setupDone && !S.history.length);
   document.body.classList.toggle("ob-mode", needSetup);
   if(needSetup){ el.innerHTML = renderOnboarding(); renderTabbar(); return; }
@@ -1965,8 +1965,9 @@ addEventListener("resize", ()=>setTimeout(tbH,50));
 function renderResume(){
   tbH();
   const r = $("resume");
-  if(S.active && !UI.workoutOpen){
-    const w = W(S.active.workoutId);
+  const w = S.active ? W(S.active.workoutId) : null;
+  if(S.active && !w){ try{ activeOrphanFix(); }catch(_){} }   // Training ohne (geladenen) Split: keine leere Leiste zeigen
+  if(S.active && w && !UI.workoutOpen){
     const {done,total} = progressOf(S.active);
     r.style.display="flex";
     r.innerHTML = `<div><b>${w.name} läuft</b><small>${done} von ${total} Sätzen, <span data-elapsed></span></small></div><div class="rs-r" data-rsr></div><span class="rs-bar" data-rsbar></span>`;

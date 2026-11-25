@@ -4061,7 +4061,7 @@ Vorgehen:
 3. Nährwerte je Zutat mit Standard-Nährwerttabellen (z. B. BLS/USDA; Vollmilch 3,5 %: 64 kcal, 3,3 g Eiweiß, 4,8 g KH, 3,5 g Fett je 100 ml). Bei Markenprodukten die bekannten Herstellerangaben.
 4. Summiere alles.
 5. ${BLS_PROMPT_COMP} Verwende die Mengen aus Schritt 2.
-Antworte NUR mit JSON: {"name":"…","zutaten":"kurze Aufzählung mit Mengen und kcal je Zutat, z. B. 2 Espresso (60 ml, 2 kcal) · 130 ml Milch 3,5 % (83 kcal)","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"komponenten":[{"name":"…","gramm":Zahl,"zubereitung":"…","suche":["…"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. Makros in Gramm, gerundet auf ganze Zahlen.`;
+Antworte NUR mit JSON: {"name":"…","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"komponenten":[{"name":"…","gramm":Zahl,"zubereitung":"…","suche":["…"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. Makros in Gramm, gerundet auf ganze Zahlen.`;
     const res = await sample.json(prompt, {modelTier:"default"});
     if(!res || !isFinite(+res.kcal)) throw new Error("leer");
     if(Array.isArray(res.komponenten) && res.komponenten.length){
@@ -4069,7 +4069,7 @@ Antworte NUR mit JSON: {"name":"…","zutaten":"kurze Aufzählung mit Mengen und
       const comp=await blsResolve(sample, res.komponenten);
       if(comp.length){ foodEditor({name:String(res.name||q).slice(0,60), ...compSum(comp), comp, ai:true}, meal, -1); return; }
     }
-    foodEditor({name:String(res.name||q).slice(0,60), parts:String(res.zutaten||[res.menge, res.quelle].filter(Boolean).join(" · ")).slice(0,300), kcal:Math.round(+res.kcal||0), p:Math.round(+res.protein||0), c:Math.round(+res.kohlenhydrate||0), f:Math.round(+res.fett||0), ai:true}, meal, -1, "Berechnet mit Standard-Nährwerttabellen, nicht online geprüft. Bei Packungsprodukten ist ein Foto der Nährwerttabelle am genauesten.");
+    foodEditor({name:String(res.name||q).slice(0,60), parts:String(compPartsText(res.komponenten)||res.zutaten||[res.menge, res.quelle].filter(Boolean).join(" · ")).slice(0,300), kcal:Math.round(+res.kcal||0), p:Math.round(+res.protein||0), c:Math.round(+res.kohlenhydrate||0), f:Math.round(+res.fett||0), ai:true}, meal, -1, "Berechnet mit Standard-Nährwerttabellen, nicht online geprüft. Bei Packungsprodukten ist ein Foto der Nährwerttabelle am genauesten.");
   }catch(err){
     foodEditor({name:q.trim().slice(0,60), kcal:"", p:"", c:"", f:""}, meal, -1, err && err.code==="not_granted" ? "Die KI-Abfrage wurde nicht erlaubt – trag die Werte selbst ein." : "Konnte keine Nährwerte ermitteln – trag die Werte selbst ein oder versuch es mit einer genaueren Beschreibung.");
   }
@@ -5116,10 +5116,10 @@ async function foodPhotoRun(file, meal, thumb, desc){
     }
     // Schritt 2: Mahlzeit – Bestandteile + Gramm erkennen
     if(!desc) step("Mahlzeit wird analysiert …","Claude erkennt die Bestandteile und schätzt die Gramm.");
-    const res = await sampleJSON(sample, `Analysiere das Foto einer Mahlzeit (${MEALS.find(x=>x[0]===meal)[1]}). ${desc?`WICHTIG – Angabe des Nutzers zum Foto (hat Vorrang vor deiner Bilderkennung, genannte Mengen exakt übernehmen): """${desc}""". `:""}Erkenne die Lebensmittel, schätze realistische Portionsgrößen in Gramm (Teller ~26 cm als Referenz) und berechne die Nährwerte mit gängigen Nährwerttabellen.${photoCalib()} Antworte NUR mit JSON: {"name":"kurzer deutscher Name","etikett":true/false,"teile":"kurze Aufzählung mit Grammangaben bzw. abgelesenen Werten","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"gramm":Zahl,"komponenten":[{"name":"…","gramm":Zahl,"zubereitung":"…","suche":["…"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. Grammangaben für Makros. "gramm" = geschätztes Gesamtgewicht der Mahlzeit auf dem Foto in g. Bei einer Mahlzeit (kein Etikett) zusätzlich "komponenten": ${BLS_PROMPT_COMP} Die Gramm je Bestandteil sorgfältig am Foto schätzen. Wenn kein Essen erkennbar ist: {"name":null}.`, {images:[blob], modelTier:"default"}, 45000);
+    const res = await sampleJSON(sample, `Analysiere das Foto einer Mahlzeit (${MEALS.find(x=>x[0]===meal)[1]}). ${desc?`WICHTIG – Angabe des Nutzers zum Foto (hat Vorrang vor deiner Bilderkennung, genannte Mengen exakt übernehmen): """${desc}""". `:""}Erkenne die Lebensmittel, schätze realistische Portionsgrößen in Gramm (Teller ~26 cm als Referenz) und berechne die Nährwerte mit gängigen Nährwerttabellen.${photoCalib()} Antworte NUR mit JSON: {"name":"kurzer deutscher Name","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"gramm":Zahl,"komponenten":[{"name":"…","gramm":Zahl,"zubereitung":"…","suche":["…"],"kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. Grammangaben für Makros. "gramm" = geschätztes Gesamtgewicht der Mahlzeit auf dem Foto in g. Bei einer Mahlzeit (kein Etikett) zusätzlich "komponenten": ${BLS_PROMPT_COMP} Die Gramm je Bestandteil sorgfältig am Foto schätzen. Wenn kein Essen erkennbar ist: {"name":null}.`, {images:[blob], modelTier:"default"}, 45000);
     if(!live()) return;
     if(!res || !res.name){ foodEditor({name:"", kcal:0, p:0, c:0, f:0}, meal, -1, "Auf dem Foto war kein Essen erkennbar – trag die Werte bitte selbst ein."); return; }
-    const it={name:String(res.name).slice(0,60), parts:String(res.teile||"").slice(0,200), kcal:Math.round(+res.kcal||0), p:Math.round(+res.protein||0), c:Math.round(+res.kohlenhydrate||0), f:Math.round(+res.fett||0), ai:true};
+    const it={name:String(res.name).slice(0,60), parts:String(compPartsText(res.komponenten)||res.teile||"").slice(0,200), kcal:Math.round(+res.kcal||0), p:Math.round(+res.protein||0), c:Math.round(+res.kohlenhydrate||0), f:Math.round(+res.fett||0), ai:true};
     // Schritt 3: Nährwerte aus dem BLS
     if(Array.isArray(res.komponenten) && res.komponenten.length){
       step("Nährwerte aus dem BLS …", esc(res.komponenten.map(k=>k.name).join(", ")));
@@ -5281,6 +5281,8 @@ const r1 = v => Math.round(v);
 function compVals(c){ const g=+c.g||0; if(c.k100) return {kcal:c.k100.kcal*g/100, p:c.k100.p*g/100, c:c.k100.c*g/100, f:c.k100.f*g/100};
   const e=c.est||{kcal:0,p:0,c:0,f:0}, g0=+c.g0||g||1; return {kcal:e.kcal*g/g0, p:e.p*g/g0, c:e.c*g/g0, f:e.f*g/g0}; }
 function compSum(L){ const t={kcal:0,p:0,c:0,f:0}; (L||[]).forEach(c=>{ const v=compVals(c); for(const k in t) t[k]+=v[k]; }); for(const k in t) t[k]=Math.round(t[k]); return t; }
+/* Zeile unter dem Eintrag aus Claudes Bestandteilen bauen (statt sie zusätzlich als Text anzufordern) */
+function compPartsText(K){ if(!Array.isArray(K) || !K.length) return ""; return K.map(k=>`${k.name||"?"} ${Math.round(+k.gramm||0)} g (${Math.round(+k.kcal||0)} kcal)`).join(" · "); }
 function compText(L){ return (L||[]).map(c=>`${c.name} ${r1(c.g)} g (${r1(compVals(c).kcal)} kcal)`).join(" · "); }
 /* Schritt 2: passenden BLS-Eintrag je Bestandteil wählen (Claude wählt aus lokal gefundenen Kandidaten) */
 async function blsResolve(sample, comps){

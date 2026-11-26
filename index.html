@@ -3295,22 +3295,30 @@ function renderCalendar(){
 }
 /* Körperzusammensetzung: fettfreie Masse und Fettmasse aus Ø-Gewicht und Körperfett-Schätzungen */
 function renderComp(){
-  const n=NU(); try{ kfaLogSync(n); }catch(_){} const L=(n.kfaLog||[]).filter(x=>isFinite(+x.kfa)); const list=bodySorted(); if(!L.length || !list.length) return "";
+  const n=NU(); try{ kfaLogSync(n); }catch(_){} const L=(n.kfaLog||[]).filter(x=>isFinite(+x.kfa)).slice().sort((a,b)=>a.d<b.d?-1:1); const list=bodySorted(); if(!L.length || !list.length) return "";
   const kgAt=d=>{ const i=list.map(x=>x.d).filter(x=>x<=d).length-1; return i>=0 ? avg7(list,i) : list[0].kg; };
   const pts=L.map(x=>{ const kg=kgAt(x.d); const fat=kg*x.kfa/100; return {d:x.d, kg, fat, lean:kg-fat, kfa:+x.kfa}; });
-  const now=pts[pts.length-1], kgNow=bodyAvgNow()??now.kg, fatNow=kgNow*now.kfa/100, leanNow=kgNow-fatNow;
+  const days=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+  // Körperfett-Schätzungen (Foto/KI) haben etwa ±3 Prozentpunkte Unsicherheit → aktueller Wert = Mittel der letzten bis zu 3 Schätzungen aus 3 Wochen
+  const last=pts[pts.length-1], start=pts[0];
+  const recent=pts.filter(p=>p!==start || pts.length===1).filter(p=>days(p.d,last.d)<=21).slice(-3);
+  const kfaNow=recent.reduce((t,p)=>t+p.kfa,0)/recent.length;
+  const kgNow=bodyAvgNow()??last.kg, fatNow=kgNow*kfaNow/100, leanNow=kgNow-fatNow;
   const f=v=>fmtNum(Math.round(v*10)/10), sg=v=>(v>0?"+":"")+f(v);
+  const span=pts.length>=2 ? days(start.d,last.d) : 0, MIN=21, NOISE=2.5;
   let delta="";
-  if(pts.length>=2){ const a=pts[0]; const dl=leanNow-a.lean, df=fatNow-a.fat;
-    delta=`<div class="cmp-d"><div><span>Fettfreie Masse</span><b class="${dl>=-0.3?"good":"bad"}">${sg(dl)} kg</b></div><div><span>Fettmasse</span><b class="${df<=0?"good":"bad"}">${sg(df)} kg</b></div></div>
-      <p class="pc-sub" style="margin:8px 0 0">Seit ${new Date(a.d).toLocaleDateString("de-DE")}. ${dl>=-0.3&&df<0?"Du verlierst Fett und hältst deine Muskeln – genau so soll ein Cut laufen.":df<0?"Du verlierst Fett, aber auch etwas fettfreie Masse – Eiweiß und Training hochhalten.":"Noch kein klarer Fettverlust."}</p>`; }
-  else delta=`<p class="pc-sub" style="margin:10px 0 0">Für den Verlauf alle 2–3 Wochen unten ein Fortschrittsfoto hinzufügen und vergleichen – immer bei gleichem Licht.</p>`;
-  const pf=Math.max(4,Math.min(60,fatNow/kgNow*100));
+  if(pts.length<2) delta=`<p class="pc-sub" style="margin:10px 0 0">Für den Verlauf alle 2–3 Wochen ein Fortschrittsfoto hinzufügen – immer bei gleichem Licht. Ein Vergleich ist ab 3 Wochen Abstand aussagekräftig.</p>`;
+  else if(span<MIN) delta=`<p class="pc-sub" style="margin:10px 0 0">Noch kein Vergleich: Die Schätzungen liegen erst ${span} ${span===1?"Tag":"Tage"} auseinander. Körperfett lässt sich per Foto nur auf etwa ±3 % genau schätzen – Veränderungen werden ab ca. 3 Wochen Abstand sichtbar (noch ${MIN-span} ${MIN-span===1?"Tag":"Tage"}).</p>`;
+  else { const dl=leanNow-start.lean, df=fatNow-start.fat, sure=Math.abs(kfaNow-start.kfa)>=NOISE;
+    const cl=(ok)=>sure?(ok?"good":"bad"):"";
+    delta=`<div class="cmp-d"><div><span>Fettfreie Masse</span><b class="${cl(dl>=-0.3)}">${sg(dl)} kg</b></div><div><span>Fettmasse</span><b class="${cl(df<=0)}">${sg(df)} kg</b></div></div>
+      <p class="pc-sub" style="margin:8px 0 0">Seit ${new Date(start.d).toLocaleDateString("de-DE")}. ${!sure?"Der Unterschied der Körperfett-Schätzungen liegt noch innerhalb ihrer Ungenauigkeit (±3 %) – nur eine Tendenz, kein sicherer Wert.":dl>=-0.3&&df<0?"Du verlierst Fett und hältst deine Muskeln – genau so soll ein Cut laufen.":df<0?"Du verlierst Fett, aber auch etwas fettfreie Masse – Eiweiß und Training hochhalten.":"Noch kein klarer Fettverlust."}</p>`; }
+  const pf=Math.max(4,Math.min(60,kfaNow));
   return `<div class="pcard"><div class="pc-h"><h3>Körperzusammensetzung</h3></div>
     <div class="cmp-bar"><i style="width:${100-pf}%"></i><em style="width:${pf}%"></em></div>
-    <div class="cmp-l"><div><i class="ln"></i><span>Fettfrei</span><b>${f(leanNow)} kg</b></div><div><i class="ft"></i><span>Fett · ${fmtNum(now.kfa)} %</span><b>${f(fatNow)} kg</b></div></div>
+    <div class="cmp-l"><div><i class="ln"></i><span>Fettfrei</span><b>${f(leanNow)} kg</b></div><div><i class="ft"></i><span>Fett · ca. ${fmtNum(Math.round(kfaNow*10)/10)} %</span><b>${f(fatNow)} kg</b></div></div>
     ${delta}
-    <p class="nu-hint" style="margin-top:8px">Schätzung aus Ø-Gewicht (7 Tage) und Körperfett. Fettfrei = Muskeln, Wasser, Knochen, Organe.</p></div>`;
+    <p class="nu-hint" style="margin-top:8px">Schätzung aus Ø-Gewicht (7 Tage) und Körperfett${recent.length>1?` (Mittel der letzten ${recent.length} Schätzungen)`:""}, Genauigkeit etwa ±3 %. Fettfrei = Muskeln, Wasser, Knochen, Organe.</p></div>`;
 }
 function renderProgress(){
   const t=UI.progTab||"body";

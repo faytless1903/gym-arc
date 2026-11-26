@@ -3403,7 +3403,17 @@ function editSave(){
   S.settings.order=S.settings.order||{}; S.settings.order[wid]=list.map(x=>x.id);
   try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){}
   buildPlan(); applyOrder(); saveLocal(); saveSettingsRemote();
-  if(S.active && S.active.workoutId===wid){ const w=AW(S.active); w.exercises.forEach(e=>{ if(!S.active.ex[e.id]) S.active.ex[e.id]={warm:null,sets:Array.from({length:e.sets},()=>({kg:null,reps:null,done:false}))}; if(!S.active.base[e.id]) S.active.base[e.id]=baselineRec(e); }); persist(); }
+  if(S.active && S.active.workoutId===wid){ const A=S.active; const w=AW(A); A.base=A.base||{};
+    w.exercises.forEach(e=>{
+      if(!A.base[e.id]) A.base[e.id]=baselineRec(e);
+      const x=A.ex[e.id];
+      if(!x){ A.ex[e.id]=exInit(e, A.base[e.id]); return; }
+      // geänderte Satzzahl gilt sofort: fehlende Sätze anhängen (Gewicht wie der letzte Satz), überzählige offene Sätze am Ende entfernen
+      const S0=x.sets;
+      if(S0.length<e.sets){ const last=S0[S0.length-1]||{}; const r=A.base[e.id];
+        while(S0.length<e.sets) S0.push({kg: last.kg!=null?last.kg:(r&&r.kg!=null?r.kg:null), reps: e.reps, done:false, ...(last.kgAuto||(r&&r.kg!=null&&last.kg==null)?{kgAuto:true}:{})}); }
+      else if(S0.length>e.sets){ while(S0.length>e.sets && !S0[S0.length-1].done) S0.pop(); }
+    }); A.updated=Date.now(); persist(); if(UI.workoutOpen) renderWorkout(); if(UI.ex) renderEx(); updateFab(); }
   UI.edit=null; renderPreview(); renderHome(); toast("Plan gespeichert");
 }
 function editRows(){

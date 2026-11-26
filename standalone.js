@@ -307,7 +307,7 @@
     if(Array.isArray(d.body) && d.body.length) out.push({ id: "body", data: { entries: d.body } });
     var s = d.settings || {};
     if(d.settings) out.push({ id: "settings", data: { rest: s.rest, order: s.order || {}, plan: s.plan || null, customEx: s.customEx || {}, workouts: s.workouts || null,
-      days: s.days || null, planName: s.planName || null, profile: s.profile || null, resets: s.resets || null } });
+      days: s.days || null, planName: s.planName || null, profile: s.profile || null, resets: s.resets || null, steps: s.steps || null, stacks: s.stacks || null } });
     Object.keys(d.food || {}).forEach(function(k){ if(/^\d{4}-\d\d-\d\d$/.test(k) && d.food[k]) out.push({ id: "f" + k, data: d.food[k] }); });
     if(d.nutri) out.push({ id: "nutri", data: d.nutri });
     if(d.active) out.push({ id: "active", data: { session: d.active } });

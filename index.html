@@ -515,6 +515,7 @@ details.nu-det>summary::-webkit-details-marker{display:none}
 .ex-h h2{min-width:0;flex:1;overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto;font-size:38px;line-height:1.02;margin:0;font-weight:850;font-stretch:var(--cond);letter-spacing:-.4px}
 .ex-sub{display:flex;flex-wrap:nowrap;gap:6px;margin-top:12px;overflow-x:auto;scrollbar-width:none}.ex-sub::-webkit-scrollbar{display:none}
 .ex-sub span{background:var(--tile);color:var(--muted);border-radius:999px;padding:5px 9px;font-size:13px;font-weight:550;white-space:nowrap;flex-shrink:0}
+.ex-sub .ex-step{color:var(--accent);cursor:pointer}
 .warm-btn{background:none;color:var(--muted);border:1.5px dashed var(--line);border-radius:var(--r-md);padding:11px 16px;font-size:15px;font-weight:600;margin-top:20px;width:100%}
 .warm-btn.on{color:var(--warm);border-color:var(--warm);border-style:solid;background:var(--warm-soft)}
 .sets{margin-top:24px}
@@ -1661,7 +1662,7 @@ async function initCloud(){
     // lokale, noch nicht hochgeladene Workouts hochladen
     const remoteIds = new Set(snap.docs.map(d=>d.id));
     for(const h of S.history){ if(!remoteIds.has("w"+h.id)){ await pushHistory(h); } }
-    if(remoteSettings && !localStorage.getItem(LS_KEY+"-setlocal")){ if(remoteSettings.rest) S.settings.rest = remoteSettings.rest; if(remoteSettings.plan) S.settings.plan=remoteSettings.plan; ["workouts","days","planName","profile","resets"].forEach(k=>{ if(remoteSettings[k]) S.settings[k]=remoteSettings[k]; }); if(Array.isArray(remoteSettings.workouts)) S.setupDone=true; if(remoteSettings.customEx) S.settings.customEx=remoteSettings.customEx; if(remoteSettings.plan||remoteSettings.customEx) buildPlan(); if(remoteSettings.order){ S.settings.order=remoteSettings.order; applyOrder(); } changed=true; }
+    if(remoteSettings && !localStorage.getItem(LS_KEY+"-setlocal")){ if(remoteSettings.rest) S.settings.rest = remoteSettings.rest; if(remoteSettings.plan) S.settings.plan=remoteSettings.plan; ["workouts","days","planName","profile","resets","steps","stacks"].forEach(k=>{ if(remoteSettings[k]) S.settings[k]=remoteSettings[k]; }); if(Array.isArray(remoteSettings.workouts)) S.setupDone=true; if(remoteSettings.customEx) S.settings.customEx=remoteSettings.customEx; if(remoteSettings.plan||remoteSettings.customEx) buildPlan(); if(remoteSettings.order){ S.settings.order=remoteSettings.order; applyOrder(); } changed=true; }
     swapLegsOnce(); seedRecipesOnce(); try{ seedKantineOnce(); }catch(_){ } try{ favLabelFix(); }catch(_){ } try{ recSyncAll(); }catch(_){ } seedPhotoRefsOnce();
     const remoteDone = remoteActive && S.history.some(h=>h.start===remoteActive.start || String(h.id)===String(remoteActive.start));
     if(remoteDone){ remoteActive=null; userCol().doc("active").delete().catch(()=>{}); }
@@ -1997,7 +1998,7 @@ function renderResume(){
 }
 const HIST_BACK=`<button class="back-link" data-act="tab" data-tab="train">‹ Training</button>`;
 function renderHistory(){
-  if(!S.history.length) return `<div class="home">${HIST_BACK}<div class="h-title">Verlauf</div><div class="empty">Noch keine abgeschlossenen Trainings.<br>Starte Push oder Pull – nach „Training beenden“ landet es hier.</div></div>`;
+  if(!S.history.length) return `<div class="home">${HIST_BACK}<div class="h-title">Verlauf</div><div class="empty">Noch keine abgeschlossenen Trainings.<br>Starte ein Training – nach „Training beenden“ landet es hier.</div></div>`;
   return `<div class="home">${HIST_BACK}<div class="h-title">Verlauf</div><div class="h-sub">${S.history.length} Training${S.history.length===1?"":"s"}</div>
   ${S.history.map(h=>{
     const d = new Date(h.start);
@@ -2465,7 +2466,7 @@ function _renderEx(){
         return `<button class="strip-b" data-act="openEx" data-ex="${o.id}">${thumb(o, (o.id===exId?"cur ":"")+(fin?"fin":""))}<span class="setdots sm">${ox.sets.map(s=>`<i class="${s.done?"on":""}"></i>`).join("")}</span></button>`;}).join("")}</div>
       ${altSwitch(e.slot||e.id, e.id, false)}
       <div class="ex-h"><h2>${e.name}</h2></div>
-      <div class="ex-sub"><span>${e.equip}</span><span>${repTxt(e)} Wdh</span><span>Pause ${fmtTime(e.rest||S.settings.rest)}</span><span>${e.muscle}</span></div>
+      <div class="ex-sub"><span>${e.equip}</span><span>${repTxt(e)} Wdh</span><span>Pause ${fmtTime(e.rest||S.settings.rest)}</span>${e.equip!=="Körpergewicht"?`<span class="ex-step" data-act="stepOpen" data-id="${e.id}">${stepLabel(e)} ›</span>`:""}<span>${e.muscle}</span></div>
       ${isBlocked(e.id) ? `<button class="block-wide" data-act="blockEx" data-ex="${e.id}">Gerät belegt – andere Übung vorschlagen</button>` : ""}
       ${recCard(e)}
       <div class="sets">
@@ -2487,7 +2488,16 @@ function usedWeights(exId){ const set=new Set(); S.history.forEach(h=>h.exercise
 const PEC_PLATES=[5,12,19,26,33,40,47,54,61,68,75,82,89,96,103,110,117,124,131,138];   // Butterfly-Maschine (Foto vom 15.11.)
 // dazu 2 Zusatzscheiben à 2,5 kg -> jede Stufe auch +2,5 und +5 kg (z. B. 47 · 49,5 · 52 · 54)
 const PEC_STACK=[...new Set(PEC_PLATES.flatMap(s=>[s, s+2.5, s+5]))].sort((a,b)=>a-b);
-function stackOf(e){ const id=e&&e.id; const own=(S.settings.stacks||{})[id]; if(Array.isArray(own)&&own.length) return own; return (id==="bfw"||id==="bfr") ? PEC_STACK : null; }
+function stepLabel(e){ const L=stackOf(e); if(L) return "Stufen: eigene"; return "Stufe "+fmtNum(STEP(e))+" kg"; }
+function stepModal(id){ const e=exDef(id)||{id}; const own=(S.settings.steps||{})[id], L=(S.settings.stacks||{})[id];
+  const cur = L&&L.length ? "list" : own ? String(own) : "auto";
+  modal(`<h3>Gewichtsstufe</h3><p style="margin:-2px 0 12px">${esc(e.name||"")}: In welchen Schritten lässt sich das Gewicht an deinem Gerät verstellen? Danach richten sich die Empfehlungen.</p>
+    <div class="st-seg" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px">${[["1.25","1,25 kg"],["2.5","2,5 kg"],["5","5 kg"],["auto","Automatisch"],["list","Eigene Liste"]].map(([k,l],i)=>`<button style="grid-column:span ${i<3?2:3}" class="${cur===k?"on":""}" data-act="stepSet" data-id="${id}" data-k="${k}">${l}</button>`).join("")}</div>
+    <div id="stepList" style="margin-top:12px;${cur==="list"?"":"display:none"}"><label class="nu-f"><span>Alle möglichen Gewichte, mit Komma oder Leerzeichen getrennt</span><div><input id="stepIn" data-native inputmode="text" value="${L&&L.length?L.map(fmtNum).join("; "):""}" placeholder="z. B. 5; 12; 19; 26; 33"><em>kg</em></div></label>
+    <button class="m-btn pri" data-act="stepList" data-id="${id}" style="margin-top:10px">Speichern</button></div>
+    <p class="nu-hint" style="margin-top:12px">Automatisch: 2,5 kg bei Kurzhanteln, sonst 5 kg – bis du Zwischengewichte (z. B. 62,5) einträgst.</p>`); }
+function stepSave(){ try{ localStorage.setItem(LS_KEY+"-setlocal","1"); }catch(_){} saveLocal(); saveSettingsRemote(); if(UI.ex) renderEx(); }
+function stackOf(e){ const id=e&&e.id; const own=(S.settings.stacks||{})[id]; if(Array.isArray(own)&&own.length) return own; return (isOwner() && (id==="bfw"||id==="bfr")) ? PEC_STACK : null; }   // Butterfly-Stufen gelten nur für Philipps Gym
 // mode: "near" | "up" (> ref) | "down" (< ref)
 function snapStack(e, v, mode="near", ref=v){ const L=stackOf(e); if(!L) return v;
   if(mode==="up"){ const x=L.find(s=>s>ref+0.01); return x!=null? x : L[L.length-1]; }
@@ -2495,6 +2505,7 @@ function snapStack(e, v, mode="near", ref=v){ const L=stackOf(e); if(!L) return 
   return L.reduce((b,s)=>Math.abs(s-v)<Math.abs(b-v)?s:b, L[0]); }
 function snapW(e, v){ return stackOf(e) ? snapStack(e, v) : roundTo(v, STEP(e)); }
 const STEP = e => {
+  const own=e && (S.settings.steps||{})[e.id]; if(own>0) return own;
   if(stackOf(e)){ const L=stackOf(e); let m=Infinity; for(let i=1;i<L.length;i++) m=Math.min(m, L[i]-L[i-1]); return isFinite(m)? m : 7; }
   // Geräte/Stangen: Scheiben kommen auf beide Seiten bzw. Steckgewichte in 5er-Stufen -> 5 kg.
   // 2,5 kg nur bei Kurzhanteln/Kettlebells oder wenn bei dieser Übung zuletzt wirklich Zwischenstufen (z. B. 27,5) trainiert wurden.
@@ -4754,6 +4765,7 @@ function coachContext(){
   const L=[]; const f1=v=>fmtNum(Math.round(v*10)/10);
   try{ const n=NU(); const T=nuTargets(); const c=cutStats();
     L.push(`Profil: ${n.sex==="f"||n.sex==="w"?"Frau":n.sex==="m"?"Mann":"Geschlecht unbekannt"}${n.age?`, ${n.age} Jahre`:""}${n.height?`, ${n.height} cm`:""}${bodyAvgNow()?`, Gewicht Ø 7 Tage ${f1(bodyAvgNow())} kg`:""}${n.kfa!=null?`, Körperfett ca. ${n.kfa} %`:""}.`);
+    try{ const r=nuCalc(n); L.push(`Ernährungsziel: ${r?(r.mode==="cut"?"Abnehmen (Defizit)":r.mode==="bulk"?"Muskelaufbau (Überschuss "+r.surplus+" kcal)":"Gewicht halten"):"noch nicht festgelegt"}. Trainingsstil: ${toFail()?"jeder Satz bis Muskelversagen":"Sätze 1–2 Wdh vor dem Versagen beenden"}. Trainingstage pro Woche: ${trainDays()}.`); }catch(_){}
     if(T) L.push(`Tagesziele: ${T.kcal} kcal, ${T.p} g Eiweiß, ${T.c} g Kohlenhydrate, ${T.f} g Fett.`);
     if(c && c.c) L.push(`Cut seit ${c.c.start}: Start ${f1(c.c.startKg)} kg, Ziel ${f1(c.c.targetKg)} kg, geplant ${f1(c.c.rate||n.rate||0.5)} kg/Woche.`);
   }catch(_){}
@@ -4775,12 +4787,13 @@ function coachContext(){
   }catch(_){}
   return L.join("\n");
 }
-const COACH_TIPS=["Was soll ich heute noch essen?","Wie läuft mein Cut?","Wo stagniere ich – und was tun?","Bewerte meine letzte Trainingswoche"];
+const COACH_TIPS_FN=()=>{ let m=null; try{ const r=nuCalc(NU()); m=r&&r.mode; }catch(_){}
+  return ["Was soll ich heute noch essen?", m==="cut"?"Wie läuft mein Cut?":m==="bulk"?"Wie läuft mein Aufbau?":"Wie entwickelt sich mein Gewicht?", "Wo stagniere ich – und was tun?","Bewerte meine letzte Trainingswoche"]; };
 function coachOpen(){
   const C=UI.coach && Date.now()-UI.coach.t<30*60000 ? UI.coach : (UI.coach={t:Date.now(), msgs:[], ctx:null});
   modal(`<div class="co-h"><h3 style="margin:0">Coach</h3>${C.msgs.length?`<button class="link sm" data-act="coachNew">Neuer Chat</button>`:""}</div>
     <div class="rcc-l co-log" id="coLog">${C.msgs.map(m=>`<div class="rcc-m ${m.role==="user"?"u":"c"}">${esc(m.content).replace(/\n/g,"<br>")}</div>`).join("")}</div>
-    ${C.msgs.length?"":`<div class="co-tips">${COACH_TIPS.map(q=>`<button data-act="coachAsk" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`}
+    ${C.msgs.length?"":`<div class="co-tips">${COACH_TIPS_FN().map(q=>`<button data-act="coachAsk" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`}
     <div class="rcc-in co-in"><input id="coachIn" placeholder="Frag deinen Coach …" autocomplete="off" enterkeyhint="send"><button class="m-btn pri" data-act="coachSend" aria-label="Senden">↑</button></div>`);
   const lg=$("coLog"); if(lg) lg.scrollTop=lg.scrollHeight;
 }
@@ -5916,7 +5929,7 @@ function applyOrder(){
   PLAN.workouts.forEach(w=>{ const o=ord[w.id]; if(!o) return;
     w.exercises.sort((a,b)=>{ const ia=o.indexOf(a.id), ib=o.indexOf(b.id); return (ia<0?999:ia)-(ib<0?999:ib); }); });
 }
-function saveSettingsRemote(){ if(DB) cloudSet("settings", {rest:S.settings.rest, order:S.settings.order||{}, plan:S.settings.plan||null, customEx:S.settings.customEx||{}, workouts:S.settings.workouts||null, days:S.settings.days||null, planName:S.settings.planName||null, profile:S.settings.profile||null, resets:S.settings.resets||null}); }
+function saveSettingsRemote(){ if(DB) cloudSet("settings", {rest:S.settings.rest, order:S.settings.order||{}, plan:S.settings.plan||null, customEx:S.settings.customEx||{}, workouts:S.settings.workouts||null, days:S.settings.days||null, planName:S.settings.planName||null, profile:S.settings.profile||null, resets:S.settings.resets||null, steps:S.settings.steps||null, stacks:S.settings.stacks||null}); }
 let drag=null, suppressClick=false;
 document.addEventListener("pointerdown", e=>{
   const row=e.target.closest(".ex-row[data-drag]"); if(!row || e.target.closest("input")) return;
@@ -6188,6 +6201,16 @@ document.addEventListener("click", ev=>{
     case "sideAdd": sideAdd(); break;
     case "sideDel": sideDel(+b.dataset.i); break;
     case "settings": settingsModal(); break;
+    case "stepOpen": stepModal(b.dataset.id); break;
+    case "stepSet": { const id=b.dataset.id, k=b.dataset.k; S.settings.steps=S.settings.steps||{}; S.settings.stacks=S.settings.stacks||{};
+      document.querySelectorAll('[data-act=stepSet]').forEach(x=>x.classList.toggle("on", x===b));
+      if(k==="list"){ const l=$("stepList"); if(l) l.style.display=""; const i=$("stepIn"); if(i) i.focus(); break; }
+      delete S.settings.stacks[id]; if(k==="auto") delete S.settings.steps[id]; else S.settings.steps[id]=+k;
+      stepSave(); closeModal(); toast(k==="auto"?"Stufe: automatisch":"Stufe: "+fmtNum(+k)+" kg"); break; }
+    case "stepList": { const id=b.dataset.id; const v=[...new Set(String(($("stepIn")||{}).value||"").split(/[;\s]+|,(?!\d)/).map(x=>num(x)).filter(x=>x>0))].sort((a,c)=>a-c);
+      if(v.length<2){ toast("Mindestens zwei Gewichte eintragen"); break; }
+      S.settings.stacks=S.settings.stacks||{}; S.settings.steps=S.settings.steps||{}; S.settings.stacks[id]=v; delete S.settings.steps[id];
+      stepSave(); closeModal(); toast(v.length+" Gewichtsstufen gespeichert"); break; }
     case "stFail": { const n=NU(); n.fail = b.dataset.k==="1"; saveNutri(); document.querySelectorAll('[data-act=stFail]').forEach(x=>x.classList.toggle("on", x===b)); break; }
     case "refSave": { const e=UI.foodEdit; if(!e) break; const g=id=>{ const el=$("fe_"+id); return el? el.value : ""; };
       const it={name:g("name").trim()||e.it.name||"Mahlzeit", kcal:Math.round(num(g("kcal"))||0), p:Math.round(num(g("p"))||0), c:Math.round(num(g("c"))||0), f:Math.round(num(g("f"))||0)};

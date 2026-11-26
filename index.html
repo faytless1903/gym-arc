@@ -704,6 +704,9 @@ html,body{overflow-x:clip}
 .bstats div{background:var(--tile);border-radius:var(--r-md);padding:10px 12px}
 .bstats b{display:block;white-space:nowrap;font-size:22px;font-weight:850;font-stretch:var(--cond);font-variant-numeric:tabular-nums}
 .bstats span{font-size:12px;color:var(--muted)}
+.bstats b.bgood{color:var(--good)}.bstats b.bwarn{color:var(--warm)}
+.bdone{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;background:var(--tile);border-radius:var(--r-md);padding:12px 14px}
+.bdone b{font-size:17px;font-weight:700}.bdone b i{font-style:normal;color:var(--good);margin-right:6px}.bdone button{color:var(--accent);font-weight:650;font-size:15px}
 .bfoot{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.45}
 .bc-wrap{position:relative;margin-top:4px;touch-action:pan-y;-webkit-user-select:none;user-select:none}
 .bc-line{display:none;position:absolute;top:8px;bottom:24px;width:1.5px;margin-left:-.75px;background:var(--ink);opacity:.35;pointer-events:none;border-radius:1px}
@@ -1071,6 +1074,7 @@ body.kp-open #histsheet .sheet-scroll{padding-bottom:340px}
 .sp-fx{flex-shrink:0;width:40px;border-radius:14px;color:var(--faint);font-size:20px}
 .nu-disc{font-size:12px;color:var(--muted);margin:12px 4px 0;line-height:1.45}
 .nu-tabs{margin:4px 0 14px}
+.h-title + .rng{margin-top:14px}
 .rng.nu-tabs{padding:4px;border-radius:12px}
 .rng.nu-tabs button{font-size:15px;padding:9px 16px;border-radius:9px;color:color-mix(in srgb,var(--ink) 62%,transparent)}
 .rng.nu-tabs button.on{color:var(--ink);font-weight:700}
@@ -1761,6 +1765,7 @@ function persist(){ if(S.active) S.active.updated = Date.now(); saveLocal(); que
 /* ================= Helpers ================= */
 const $ = id => document.getElementById(id);
 const W = id => PLAN.workouts.find(w=>w.id===id);
+const nEx = n => n+" "+(n===1?"Übung":"Übungen"), nSets = n => n+" "+(n===1?"Satz":"Sätze");
 /* Übung mit Alternative (z. B. Latzug Ober- oder Untergriff): im laufenden Training gilt die gewählte Variante */
 function altOf(e){ if(!e || !e.alt) return null; const d=exDef(e.alt); if(!d) return null;
   const x={...d, sets:e.sets, reps:e.reps, rest:e.rest, slot:e.id, alt:null}; if(e.repsMax) x.repsMax=e.repsMax; else delete x.repsMax; return x; }
@@ -1883,7 +1888,7 @@ function renderHomeInner(){ try{ nameSync(); }catch(_){} try{ activeOrphanFix();
       return `<button class="w-card ${hl?"next":""}" data-act="preview" data-w="${w.id}">
         <div class="w-badge" style="--wb:${wColor(w)}">${wIcon(w)}</div>
         <div><div class="w-name">${w.name}${hl&&!runW?`<span class="nx">Als Nächstes</span>`:""}</div>
-        <div class="w-meta">${w.exercises.length} Übungen, ${totalSets(w)} Sätze</div>
+        <div class="w-meta">${nEx(w.exercises.length)}, ${nSets(totalSets(w))}</div>
         <div class="w-last">${ld? "Zuletzt "+relDay(ld).replace(/^(Heute|Gestern)$/,m=>m.toLowerCase())+(S.history.find(x=>x.workoutId===w.id).score? ", "+S.history.find(x=>x.workoutId===w.id).score.score+" %":"") : "Noch nicht trainiert"}</div></div>
         <span class="chev">›</span></button>`;
     }).join("")}
@@ -2213,7 +2218,7 @@ function renderPreview(){
     <div class="sheet-top" style="justify-content:space-between"><button class="link" data-act="edStart" data-w="${w.id}">Bearbeiten</button><button class="link" data-act="closePreview">Schließen</button></div>
     <div class="sheet-scroll">
       <div class="pv-title"><h1>${w.name}</h1><span class="dots">•••</span></div>
-      <div class="pv-meta">${PLAN.name}, Woche ${weekNo()}<br>${w.exercises.length} Übungen, ${totalSets(w)} Sätze</div>
+      <div class="pv-meta">${PLAN.name}, Woche ${weekNo()}<br>${nEx(w.exercises.length)}, ${nSets(totalSets(w))}</div>
       <div class="muscles">${muscles.map(m=>`<span class="mtag"><i style="background:${MUSCLE_COLOR[m]}"></i>${m}</span>`).join("")}</div>
       <button class="start-btn" data-act="start" data-w="${w.id}">${isActiveSame?"Fortsetzen":"Starten"}</button>
       ${isActiveOther? `<div class="note" style="margin:-8px 0 16px">Hinweis: ${AW(S.active).name} läuft noch – Starten verwirft es.</div>`:""}
@@ -3127,22 +3132,24 @@ function renderBody(){
     // Veränderung des 7-Tage-Schnitts ggü. vor 7 Tagen
     const ref = new Date(last.d); ref.setDate(ref.getDate()-7);
     const ri = list.map(x=>x.d).filter(d=>d<=todayKey(ref)).length-1;
-    let rate="–", rateNote="ab 2 Wochen Daten";
+    let rate="–", rateNote="ab 2 Wochen Daten", rateCls="";
     if(ri>=0){ const pa=avg7(list,ri); const dkg=a-pa; const pct=dkg/pa*100;
+      // Farbe je nach Ziel: passt der Trend (grün) oder läuft er dagegen (orange)?
+      try{ const r=nuCalc(NU()); const m=r&&r.mode; if(m==="cut") rateCls = dkg<=-0.05?"bgood":dkg>=0.1?"bwarn":""; else if(m==="bulk") rateCls = dkg>=0.05?"bgood":dkg<=-0.1?"bwarn":""; else if(m==="hold") rateCls = Math.abs(dkg)<=0.3?"bgood":"bwarn"; }catch(_){}
       rate = (dkg>0?"+":"")+fmtNum(Math.round(dkg*10)/10)+" kg"; rateNote=(pct>0?"+":"")+fmtNum(Math.round(pct*10)/10)+" % pro Woche"; }
     const first=list[0];
     stats = `<div class="bstats">
       ${last.d===todayKey()?"":`<div><b>${fmtNum(last.kg)}</b><span>Zuletzt (kg)</span></div>`}
       <div><b>${fmtNum(Math.round(a*10)/10)}</b><span>Ø 7 Tage</span></div>
-      <div><b>${rate}</b><span>${rateNote}</span></div></div>
+      <div><b class="${rateCls}">${rate}</b><span>${rateNote}</span></div></div>
       ${bodyForecast()}
       <div class="bfoot">Seit ${new Date(first.d).toLocaleDateString("de-DE")}: ${(last.kg-first.kg>0?"+":"")+fmtNum(Math.round((last.kg-first.kg)*10)/10)} kg. Tagesgewicht schwankt um 1–2 kg – der 7-Tage-Schnitt zeigt den echten Trend.</div>`;
   }
   return `<div class="pcard">
     <div class="pc-h"><h3>Körpergewicht</h3></div>
-    ${today ? `<div class="bform done" aria-disabled="true"><input type="text" value="${fmtNum(today.kg)}" disabled aria-label="Gewicht heute (erfasst)"><span>kg</span><button type="button" disabled>✓ Heute erfasst</button></div>` : `<form class="bform" data-form="body">
-      <input type="text" inputmode="decimal" id="bodyIn" placeholder="z. B. 82,4" aria-label="Gewicht heute in kg">
-      <span>kg</span><button type="submit">Erfassen</button>
+    ${today && !UI.bodyFix ? `<div class="bdone"><b><i>✓</i>Heute ${fmtNum(today.kg)} kg</b><button data-act="bodyFix">Ändern</button></div>` : `<form class="bform" data-form="body">
+      <input type="text" inputmode="decimal" id="bodyIn" placeholder="z. B. 82,4" aria-label="Gewicht heute in kg" value="${today?fmtNum(today.kg):""}">
+      <span>kg</span><button type="submit">${today?"Korrigieren":"Erfassen"}</button>
     </form>`}
     ${stats}
     ${bodyAll().length>=2?`<div class="vlegend" style="margin-top:14px"><span><i class="ld"></i>Tageswert</span><span><i class="la"></i>Ø 7 Tage</span>${cutActive()?`<span><i class="lpl"></i>Plan</span>`:""}${(()=>{ const c0=cutStats(); if(!c0) return ""; const c=c0.c; const m=Math.min(...list.slice(-60).map(x=>x.kg)); return c.targetKg<m-1.5?`<span class="lgoal">Ziel ${fmtNum(c.targetKg)} kg ↓</span>`:""; })()}</div>`:""}
@@ -3431,7 +3438,7 @@ function renderEditPreview(w){
     <div class="sheet-top" style="justify-content:space-between"><button class="link" data-act="edCancel">Abbrechen</button><button class="link" data-act="edSave" style="font-weight:700">Fertig</button></div>
     <div class="sheet-scroll">
       <div class="pv-title"><h1>${w.name}</h1></div>
-      <div class="pv-meta">Plan bearbeiten · ${UI.edit.list.length} Übungen, ${UI.edit.list.reduce((t,x)=>t+x.sets,0)} Sätze</div>
+      <div class="pv-meta">Plan bearbeiten · ${nEx(UI.edit.list.length)}, ${nSets(UI.edit.list.reduce((t,x)=>t+x.sets,0))}</div>
       <div style="height:14px"></div>
       ${editRows()}
       <button class="ed-add" data-act="edAddOpen">+ Übung hinzufügen</button>
@@ -3820,7 +3827,7 @@ function renderNutrition(){
         <div><b>${r.carbs} g</b><span>Kohlenhydrate</span><em>${r.carbs*4} kcal</em></div>
         <div><b>${r.fat} g</b><span>Fett</span><em>${r.fat*9} kcal</em></div>
       </div>
-      ${(()=>{ if(cutStats()) return ""; return r.weeks?`<div class="nu-eta">Ziel in ca. <b>${r.weeks} Wochen</b> – um den ${target}</div>`:""; })()}
+      ${(()=>{ if(cutStats()) return ""; return r.weeks?`<div class="nu-eta">Ziel ca. <b>${new Date(Date.now()+r.weeks*7*864e5).toLocaleDateString("de-DE",{day:"numeric",month:"short",year:"numeric"})}</b> (${r.weeks} Wochen)</div>`:""; })()}
       ${r.note?`<div class="nu-hint warn">${r.note}</div>`:""}
       <details class="nu-det"><summary>Details zur Berechnung</summary>
       <div class="nu-break">
@@ -6222,6 +6229,7 @@ document.addEventListener("click", ev=>{
     case "stgOpen": stagModal(b.dataset.ex); break;
     case "rtToggle": { const n=NU(); n.useReal=!n.useReal; if(n.useReal) n.kcalAdj=0; saveNutri(); keepScrollHome(renderHome); toast(n.useReal?"Rechnet jetzt mit deinem echten Bedarf":"Rechnet wieder mit der Formel"); break; }
     case "progTab": UI.progTab=b.dataset.t; renderHome(); { const sc=document.scrollingElement; if(sc) sc.scrollTop=0; } break;
+    case "bodyFix": { UI.bodyFix=true; keepScrollHome(renderHome); setTimeout(()=>{ const el=$("bodyIn"); if(el) try{ el.focus(); el.select&&el.select(); }catch(_){ } },80); break; }
     case "bodyEdit": { UI.bodyEdit=true; keepScrollHome(renderHome); setTimeout(()=>{ const el=$("bodyIn"); if(el) try{ el.focus(); }catch(_){ } },80); break; }
     case "goWeight": { closeModal(); UI.tab="progress"; UI.progTab="body"; UI.bodyEdit=true; renderHome(); setTimeout(()=>{ const el=$("bodyIn"); if(el){ el.scrollIntoView({block:"center", behavior:"smooth"}); setTimeout(()=>{ try{ el.focus({preventScroll:true}); }catch(_){ } },350); } },50); break; }
     case "thMode": themeSet({mode:b.dataset.k}); break;
@@ -6344,11 +6352,11 @@ document.addEventListener("submit", ev=>{
   }
   if(ev.target.dataset.form!=="body") return;
   ev.preventDefault();
-  if((S.body||[]).some(x=>x.d===todayKey())){ toast("Heute ist schon erfasst – morgen wieder"); return; }   // nur einmal täglich
+  if((S.body||[]).some(x=>x.d===todayKey()) && !UI.bodyFix){ toast("Heute ist schon erfasst – morgen wieder"); return; }   // nur einmal täglich (Korrektur des heutigen Werts erlaubt)
   const v=num($("bodyIn").value);
   if(v==null || v<30 || v>300){ toast("Bitte Gewicht in kg eingeben, z. B. 82,4"); return; }
   const k=todayKey(); S.body=(S.body||[]).filter(x=>x.d!==k); S.body.push({d:k, kg:Math.round(v*10)/10});
-  UI.bodyEdit=false; try{ kpHide(false); }catch(_){ } try{ document.activeElement && document.activeElement.blur(); }catch(_){ } saveBody(); renderHome(); toast(fmtNum(Math.round(v*10)/10)+" kg eingetragen");
+  const fixed=!!UI.bodyFix; UI.bodyEdit=false; UI.bodyFix=false; try{ kpHide(false); }catch(_){ } try{ document.activeElement && document.activeElement.blur(); }catch(_){ } saveBody(); renderHome(); toast(fmtNum(Math.round(v*10)/10)+" kg "+(fixed?"korrigiert":"eingetragen"));
 });
 // Diagramme: mit dem Finger seitlich abfahren -> Linie + Wert des nächsten Punkts
 let scrub=null;

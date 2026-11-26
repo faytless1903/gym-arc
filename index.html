@@ -2529,7 +2529,7 @@ function baselineRecRaw(ex){
   const T = ex.reps, lo = T-2, hi = ex.repsMax || T+2, st = STEP(ex);
   if(ex.reset && !(ses[0] && ses[0].date >= new Date(ex.reset.from+"T00:00:00").getTime()))
     return {action: ex.reset.action || "down", kg: ex.reset.kg, reason: ex.reset.why};
-  if(!ses.length) return {action:"new", kg:null, reason:`Erstes Mal: Nimm dein bisheriges Arbeitsgewicht und geh jeden Satz bis zum Muskelversagen. Daran messen sich die nächsten Empfehlungen.`};
+  if(!ses.length) return {action:"new", kg:null, reason:`Erstes Mal: Nimm dein bisheriges Arbeitsgewicht und ${toFail()?"geh jeden Satz bis zum Muskelversagen":"hör jeden Satz 1–2 Wdh vor dem Versagen auf"}. Daran messen sich die nächsten Empfehlungen.`};
   const L = ses[0].sets;
   const w = Math.max(...L.map(s=>s.kg||0));
   const top = L.filter(s=>(s.kg||0)===w);
@@ -2563,7 +2563,7 @@ function baselineRecRaw(ex){
     if(ju.atNew<=2)
       return {action:"down", kg:ju.pw, unclear:true, reason:`Der Sprung von ${fmtNum(ju.pw)} auf ${fmtNum(w)} kg (+${ju.pct} %) war zu groß${ju.e1Now<ju.e1Prev*0.95?" – die Kraft ist eingebrochen":""}. Zurück auf ${fmtNum(ju.pw)} kg und dort die Wdh weiter steigern (Ziel: erster Satz ${hi}+ Wdh, dann neu versuchen).`};
   } }
-  if(r1>=lo) return {action:"hold", kg:w, reason:`Abfall über die Sätze ist bei Muskelversagen normal – Gewicht halten, bis die ersten beiden Sätze ${T} Wdh (letzter max. 1 drunter) oder der erste Satz ${hi} Wdh schaffen.`};
+  if(r1>=lo) return {action:"hold", kg:w, reason:`Abfall über die Sätze ist ${toFail()?"bei Muskelversagen":"bei harten Sätzen"} normal – Gewicht halten, bis die ersten beiden Sätze ${T} Wdh (letzter max. 1 drunter) oder der erste Satz ${hi} Wdh schaffen.`};
   // Ausreißer? Vorheriges Training mit gleichem Gewicht war im Zielbereich -> halten statt senken
   if(ses[1]){ const P=ses[1].sets.filter(s=>(s.kg||0)===w); if(P.length && (P[0].reps||0)>=lo) return {action:"hold", kg:w, reason:`Einmaliger Einbruch – beim Training davor waren es noch ${P.map(s=>s.reps).join(", ")} Wdh. Gewicht halten und beobachten.`}; }
   let nk = floorTo(e1/(1+T/30), st);
@@ -2678,7 +2678,7 @@ Grundlagen, an die du dich hältst:
 - Doppelte Progression: erst Wiederholungen im Zielbereich steigern, dann Gewicht erhöhen, sobald alle Arbeitssätze die Ziel-Wdh erreichen.
 - Laststeigerung 2–10 % pro Schritt (ACSM Position Stand 2009), immer in der angegebenen weightStepKg-Stufe; nie mehr als +10 %.
 - Hypertrophie funktioniert in einem breiten Bereich, ca. 6–30 Wdh nahe am Muskelversagen (Schoenfeld et al. 2017/2021).
-- WICHTIG: Der Nutzer trainiert JEDEN Satz bis zum Muskelversagen (0 RIR). Ein Abfall der Wdh über die Sätze (z. B. 10, 8, 7) ist daher normal und kein Grund zum Senken. Beurteile vor allem den ersten Satz und die Entwicklung über mehrere Einheiten. Steigern, wenn der erste Satz ≥ targetReps+2 schafft, alle Sätze ≥ targetReps, oder die ersten beiden Sätze ≥ targetReps und der letzte höchstens 1 Wdh darunter liegt; senken nur, wenn schon der erste Satz < targetReps−2 liegt oder die Leistung über mehrere Einheiten fällt.
+- WICHTIG: ${failTxt()}. ${toFail()?"Ein Abfall der Wdh über die Sätze (z. B. 10, 8, 7) ist daher normal und kein Grund zum Senken.":"Ein leichter Abfall über die Sätze ist normal; Wdh-Werte liegen 1–2 unter dem, was bis zum Versagen möglich wäre."} Beurteile vor allem den ersten Satz und die Entwicklung über mehrere Einheiten. Steigern, wenn der erste Satz ≥ targetReps+2 schafft, alle Sätze ≥ targetReps, oder die ersten beiden Sätze ≥ targetReps und der letzte höchstens 1 Wdh darunter liegt; senken nur, wenn schon der erste Satz < targetReps−2 liegt oder die Leistung über mehrere Einheiten fällt.
 - Wdh-Progression ist ähnlich wirksam wie Last-Progression (Plotkin et al. 2022) – Halten mit +1 Wdh ist eine valide Empfehlung.
 - Senken (5–15 %) nur nach den obigen Kriterien.
 - Direkt nach einer Gewichtssteigerung (das Gewicht der letzten Einheit liegt über dem der Einheit davor) sind weniger Wdh normal. Vergleiche das geschätzte 1RM (kg × (1 + Wdh/30)) des ersten Satzes vor und nach dem Sprung: Ist es etwa gleich geblieben und schafft der erste Satz noch ≥ 5–6 Wdh, das neue Gewicht HALTEN und Wdh aufbauen – nicht sofort zurück. Nur zurück, wenn das 1RM deutlich gefallen ist, der erste Satz unter ~5 Wdh liegt oder 2+ Einheiten auf dem neuen Gewicht keine Wdh dazukommen. War der Sprung sehr groß (z. B. Kurzhanteln +25 %), sag das in der Begründung.
@@ -2746,10 +2746,10 @@ function recShort(r, ex){   // Kopfzeile zeigt schon Aktion + kg – hier nur da
   if(r.short) return r.short;
   const T = ex && ex.reps ? ex.reps : 10;
   const why = String(r.reason||"");
-  if(r.action==="new") return "Jeden Satz bis Muskelversagen";
+  if(r.action==="new") return toFail()?"Jeden Satz bis Muskelversagen":"Jeden Satz 1–2 Wdh vor Versagen";
   if(r.src==="plan") return r.action==="down" ? "Umstellung – Wdh hocharbeiten" : "Geplante Umstellung";
   if(r.action==="up") return r.kg!=null ? "Ziel geschafft" : "Ziel übertroffen – schwerer machen";
-  if(r.action==="down") return /Sprung/.test(why) ? "Sprung zu groß – Wdh aufbauen" : "Zu schwer – sauber bis Versagen";
+  if(r.action==="down") return /Sprung/.test(why) ? "Sprung zu groß – Wdh aufbauen" : (toFail()?"Zu schwer – sauber bis Versagen":"Zu schwer – Wdh aufbauen");
   if(/Einbruch/.test(why)) return "Einmaliger Einbruch – beobachten";
   if(/Sprung|Steigerung/.test(why)) return "Nach der Steigerung – Wdh aufbauen";
   return r.kg!=null ? `Bis Satz 1 und 2 je ${T} Wdh schaffen` : "Pro Satz +1 Wdh versuchen";
@@ -2773,7 +2773,7 @@ function recInfo(){
   modal(`<h3>So entstehen die Empfehlungen</h3>
   ${now?`<div class="ri-now">${now}${st==="error"?`<button class="m-btn pri" data-act="retryAi" style="margin-top:10px">Claude erneut fragen</button>`:""}</div>`:""}
   <p>Bei jedem Trainingsstart wertet Claude deine bisherigen Einheiten pro Übung aus (bis zu 5 letzte). Ohne Verbindung greift eine feste Regel:</p>
-  <p style="color:var(--ink)">Du trainierst jeden Satz bis zum Muskelversagen, daher zählt vor allem der erste Satz:<br>Erster Satz ≥ Ziel+2, alle Sätze ≥ Ziel, oder die ersten beiden Sätze ≥ Ziel und der letzte max. 1 Wdh drunter → Gewicht eine Stufe hoch (max. +10 %).<br>Erster Satz 8–11 Wdh → halten (Abfall in späteren Sätzen ist normal).<br>Erster Satz unter 8 Wdh → Gewicht senken (max. −15 %).</p>
+  <p style="color:var(--ink)">${toFail()?"Du trainierst jeden Satz bis zum Muskelversagen":"Du hörst jeden Satz 1–2 Wdh vor dem Versagen auf"}, daher zählt vor allem der erste Satz:<br>Erster Satz ≥ Ziel+2, alle Sätze ≥ Ziel, oder die ersten beiden Sätze ≥ Ziel und der letzte max. 1 Wdh drunter → Gewicht eine Stufe hoch (max. +10 %).<br>Erster Satz 8–11 Wdh → halten (Abfall in späteren Sätzen ist normal).<br>Erster Satz unter 8 Wdh → Gewicht senken (max. −15 %).</p>
   <p>Grundlagen: doppelte Progression; Laststeigerung 2–10 % (ACSM Position Stand 2009); Muskelaufbau in breitem Wdh-Bereich nahe Muskelversagen (Schoenfeld et al. 2017, 2021); Training bis zum Muskelversagen ähnlich wirksam wie knapp davor, aber ermüdender (Refalo et al. 2023); Wdh- und Last-Progression ähnlich wirksam (Plotkin et al. 2022).</p>`);
 }
 
@@ -2963,7 +2963,7 @@ function scoreBars(s){
 function scoreInfo(){
   modal(`<h3>So wird bewertet</h3>
   <p><b style="color:var(--ink)">Volumen (40 %)</b>: Anteil der geplanten Arbeitssätze, die du erledigt hast. Das Trainingsvolumen ist der stärkste Treiber für Muskelaufbau (Schoenfeld et al. 2017, Dosis-Wirkungs-Metaanalyse).</p>
-  <p><b style="color:var(--ink)">Wiederholungsqualität (30 %)</b>: Da du bis zum Muskelversagen trainierst, zählen Sätze bis 2 Wdh unter Ziel voll (Abfall über die Sätze ist normal), 3–4 darunter zu 70 %. Deutlich darunter oder weit darüber zählt weniger, weil Gewicht und Wdh-Bereich dann nicht zusammenpassen.</p>
+  <p><b style="color:var(--ink)">Wiederholungsqualität (30 %)</b>: Da du ${toFail()?"bis zum Muskelversagen":"nah am Muskelversagen"} trainierst, zählen Sätze bis 2 Wdh unter Ziel voll (Abfall über die Sätze ist normal), 3–4 darunter zu 70 %. Deutlich darunter oder weit darüber zählt weniger, weil Gewicht und Wdh-Bereich dann nicht zusammenpassen.</p>
   <p><b style="color:var(--ink)">Progression (30 %)</b>: geschätztes Maximum (Epley) bzw. Gesamt-Wdh je Übung im Vergleich zum letzten Mal. Progressive Überlastung ist Grundprinzip für weiteren Fortschritt (ACSM 2009).</p>`);
 }
 
@@ -3495,7 +3495,7 @@ async function stagAnalyze(ex){
   const prompt=`Du bist ein evidenzbasierter Krafttrainings-Coach. Diese Übung stagniert seit ${st?st.weeks:"mehreren"} Wochen (kein neuer Bestwert beim geschätzten 1RM der ersten beiden Sätze). Analysiere GENAU diese Übung und wähle die Strategie, die bei diesen Daten am meisten Fortschritt verspricht.
 
 Übung: ${ex.name} (${ex.equip}, Zielmuskel ${ex.muscle}), aktuell ${ex.sets} Sätze, Ziel ${ex.reps}${ex.repsMax?"–"+ex.repsMax:""} Wdh, Pause ${ex.rest||S.settings.rest} s, Gewichtsstufe ${STEP(ex)} kg.
-Der Nutzer trainiert jeden Satz bis zum Muskelversagen und ist gerade in einer Diät (Kaloriendefizit).
+${failTxt()} und ist ${goalTxt()}.
 Verlauf (alt → neu, Arbeitssätze): ${JSON.stringify(ses)}
 Regel-Vorschlag: ${JSON.stringify(rule)}
 
@@ -3661,11 +3661,17 @@ function startLibAnim(id, muscle){
 function stopLibAnim(){ if(libAnim) cancelAnimationFrame(libAnim); libAnim=null; }
 
 /* ================= Ernährung ================= */
-const NU_ACT = [
-  {k:"sit", s:"Sitzend", l:"Sitzend (Büro)",      f:1.5,  d:"Bürojob + 4× Krafttraining"},
-  {k:"mix", s:"Teils aktiv", l:"Teils stehend/gehend", f:1.6,  d:"z. B. Handel, viel zu Fuß + 4× Training"},
-  {k:"act", s:"Aktiv", l:"Körperlich aktiv",     f:1.75, d:"Handwerk, Lager + 4× Training"},
+const NU_ACT = [   // Faktoren gelten für 4× Krafttraining pro Woche; je Trainingstag mehr/weniger ±0,03 (≈ 300–400 kcal pro Einheit über die Woche verteilt)
+  {k:"sit", s:"Sitzend", l:"Sitzend (Büro)",      f:1.5,  d:"Bürojob"},
+  {k:"mix", s:"Teils aktiv", l:"Teils stehend/gehend", f:1.6,  d:"z. B. Handel, viel zu Fuß"},
+  {k:"act", s:"Aktiv", l:"Körperlich aktiv",     f:1.75, d:"Handwerk, Lager"},
 ];
+const trainDays = () => { const d=(PLAN && PLAN.days && PLAN.days.length) || 0; return d>0 ? Math.min(7,d) : 4; };
+const actFactor = n => (NU_ACT.find(a=>a.k===n.act)||NU_ACT[0]).f + (trainDays()-4)*0.03;
+/* Trainingsstil: bis Muskelversagen (Standard) oder 1–2 Wdh vorher aufhören */
+const toFail = () => { try{ return NU().fail!==false; }catch(_){ return true; } };
+const failTxt = () => toFail() ? "Der Nutzer trainiert JEDEN Satz bis zum Muskelversagen (0 RIR)" : "Der Nutzer beendet jeden Satz 1–2 Wdh vor dem Muskelversagen (1–2 RIR)";
+const goalTxt = () => { try{ const r=nuCalc(NU()); return r&&r.mode==="bulk"?"im Muskelaufbau (Kalorienüberschuss)":r&&r.mode==="hold"?"beim Gewicht-Halten (keine Diät)":r&&r.mode==="cut"?"in einer Diät (Kaloriendefizit)":"ohne festgelegtes Ernährungsziel"; }catch(_){ return "ohne festgelegtes Ernährungsziel"; } };
 const NU_RATE = [
   {k:.5, l:"Langsam", d:"0,5 % KG/Woche – maximaler Muskelerhalt"},
   {k:.7, l:"Empfohlen", d:"0,7 % KG/Woche – Studienoptimum für Trainierende"},
@@ -3681,7 +3687,7 @@ const NU_BULK = [
 function nuGoal(n, kg, tKg){ if(n.goal) return n.goal; if(tKg && tKg<kg-0.3) return "cut"; if(tKg && tKg>kg+0.3) return "bulk"; return n.targetKfa!=null?"cut":"hold"; }
 function nuDefaults(){
   const lastBody=(S.body||[]).slice().sort((a,b)=>a.d<b.d?-1:1).pop();
-  return {sex:"m", age:isOwner()?26:null, height:isOwner()?181:null, kg:lastBody?lastBody.kg:(isOwner()?80:null), kfa:null, kfaSrc:null, kfaRange:null, targetKg:null, targetKfa:null, act:"sit", rate:.7};
+  return {sex:isOwner()?"m":null, age:isOwner()?26:null, height:isOwner()?181:null, kg:lastBody?lastBody.kg:(isOwner()?80:null), kfa:null, kfaSrc:null, kfaRange:null, targetKg:null, targetKfa:null, act:"sit", rate:.7};
 }
 function NU(){ S.nutri = Object.assign(nuDefaults(), S.nutri||{}); const a=bodyAvgNow(); if(a!=null) S.nutri.kg=Math.round(a*10)/10; return S.nutri; }
 
@@ -3726,8 +3732,8 @@ function realTdee(){
   return {ready:true, ...status, intake, slope, tdee:Math.round(tdee/10)*10};
 }
 function nuCalc(n){
-  const kg=+n.kg, kfa=n.kfa!=null?+n.kfa/100:null, act=(NU_ACT.find(a=>a.k===n.act)||NU_ACT[0]).f;
-  if(!(kg>0) || !(+n.height>0) || !(+n.age>0)) return null;
+  const kg=+n.kg, kfa=n.kfa!=null?+n.kfa/100:null, act=actFactor(n);
+  if(!(kg>0) || !(+n.height>0) || !(+n.age>0) || !n.sex) return null;
   const mifflin = 10*kg + 6.25*n.height - 5*n.age + (n.sex==="m"?5:-161);
   const lbm = kfa!=null ? kg*(1-kfa) : null;
   const katch = lbm!=null ? 370 + 21.6*lbm : null;
@@ -3772,11 +3778,11 @@ function renderNutrition(){
   if(sub==="track") return `<div class="home nu">${head}${renderCutCard(true)}${renderTracking()}</div>`;
   if(sub==="cook") return `<div class="home nu">${head}${renderCooking()}</div>`;
   const goal=r?r.goal:nuGoal(n, +n.kg, null);
-  const missing=!(n.height&&n.age) || (goal==="cut" && n.targetKfa==null);
+  const missing=!(n.height&&n.age&&n.sex) || (goal==="cut" && n.targetKfa==null);
   const angaben=`<details class="pcard nu-adj" ${missing?"open":""}><summary><h3>Angaben anpassen</h3><span>${[(NU_GOAL.find(g=>g.k===goal)||{}).l, n.kfa!=null?`${fmtNum(n.kfa)} % KFA`:null, goal==="cut"&&n.targetKfa!=null?`Ziel ${fmtNum(n.targetKfa)} %`:null, goal==="cut"?(NU_RATE.find(a=>a.k===n.rate)||{}).l:null, goal==="bulk"?(NU_BULK.find(a=>a.k===(n.bulk||"mod"))||{}).l:null].filter(Boolean).join(" · ")}</span></summary>
       <div class="nu-l" style="margin-top:4px">Ziel</div>
       <div class="nu-seg">${NU_GOAL.map(g=>`<button class="${goal===g.k?"on":""}" data-act="nuSet" data-k="goal" data-v="${g.k}">${g.l}</button>`).join("")}</div>
-      ${missing&&!(n.height&&n.age)?`<div class="nu-hint warn">Trag Größe und Alter ein, damit dein Bedarf berechnet werden kann.</div>`:""}
+      ${missing&&!(n.height&&n.age&&n.sex)?`<div class="nu-hint warn">Trag Geschlecht, Größe und Alter ein, damit dein Bedarf berechnet werden kann.</div>`:""}
       <div class="nu-grid">
         ${(()=>{ const has=bodySorted().length; return `<button class="nu-f nu-kgro" data-act="goWeight"><span>Gewicht${has?" · Ø 7 Tage":""}</span><div><b>${has?fmtNum(n.kg):"–"}</b><em>kg</em></div><small>${has?"Eintragen unter Fortschritt ›":"Unter Fortschritt eintragen ›"}</small></button>`; })()}
         ${field("kfa","Körperfett",n.kfa,"%")}
@@ -3791,7 +3797,7 @@ function renderNutrition(){
       <div class="nu-grid" style="margin-top:10px">${field("bulkKg","Zielgewicht (optional)",n.bulkKg,"kg")}</div>`:""}
       <div class="nu-grid" style="margin-top:12px">${field("height","Größe",n.height,"cm","1")}${field("age","Alter",n.age,"J.","1")}</div>
       <div class="nu-seg">${[["m","Mann"],["f","Frau"]].map(([k,l])=>`<button class="${n.sex===k?"on":""}" data-act="nuSet" data-k="sex" data-v="${k}">${l}</button>`).join("")}</div>
-      <div class="nu-l">Alltag</div>
+      <div class="nu-l">Alltag <span style="font-weight:500;color:var(--muted)">· mit ${trainDays()}× Training pro Woche</span></div>
       <div class="nu-seg nu-seg3">${NU_ACT.map(a=>`<button class="${n.act===a.k?"on":""}" data-act="nuSet" data-k="act" data-v="${a.k}">${a.s||a.l}</button>`).join("")}</div>
     </details>`;
   return `<div class="home nu">${head}${renderCutCard(false)}
@@ -3832,7 +3838,7 @@ function renderNutrition(){
 function nuInfo(){
   modal(`<h3>So wird gerechnet</h3>
   <p style="color:var(--ink)"><b>Grundumsatz:</b> Mifflin-St Jeor (bei bekanntem Körperfett gemittelt mit Katch-McArdle, das die fettfreie Masse nutzt). Mifflin-St Jeor trifft in einer systematischen Übersicht am häufigsten auf ±10 % den gemessenen Wert (Frankenfield et al. 2005).</p>
-  <p style="color:var(--ink)"><b>Gesamtbedarf:</b> Grundumsatz × Aktivitätsfaktor (1,5–1,75 inkl. 4× Krafttraining pro Woche).</p>
+  <p style="color:var(--ink)"><b>Gesamtbedarf:</b> Grundumsatz × Aktivitätsfaktor (1,5 / 1,6 / 1,75 je nach Alltag bei 4× Krafttraining pro Woche; je Trainingstag mehr oder weniger ±0,03 – deine Trainingstage stellst du unter Zahnrad → Trainingstage ein).</p>
   <p style="color:var(--ink)"><b>Diät-Tempo:</b> 0,7 % Körpergewicht pro Woche als Standard. In einer Studie mit Athleten und 4× Krafttraining pro Woche verlor die langsame Gruppe (0,7 %) mehr Fett und baute fettfreie Masse auf, die schnelle (1,4 %) nicht (Garthe et al. 2011). 1 kg Fett ≈ 7.700 kcal.</p>
   <p style="color:var(--ink)"><b>Aufbau:</b> Überschuss von 5 % (leicht), 10 % (moderat) oder 15 % (stark) über dem Bedarf. Für Trainierte gilt grob ~0,25–0,5 % Körpergewicht pro Woche als sinnvoll; ein größerer Überschuss bringt vor allem mehr Fett. Anfänger können eher stärker aufbauen. Die angezeigte kg/Woche ist eine Obergrenze (1 kg Fett ≈ 7.700 kcal, Muskelgewebe braucht weniger).</p>
   <p style="color:var(--ink)"><b>Eiweiß:</b> 1,6 g/kg (Erhalt/Aufbau) bzw. 1,8 g/kg in der Diät. Eine Meta-Analyse mit 49 Studien fand ab ~1,6 g/kg keinen weiteren Zuwachs an Muskelmasse (Morton et al. 2018); im Defizit gibt ein kleiner Puffer darüber zusätzliche Sicherheit für die Muskeln.</p>
@@ -3848,7 +3854,7 @@ async function nuPhotoAnalyze(file){
   try{
     const blob = await nuShrink(file);
     const n=NU();
-    const prompt = `Schätze den Körperfettanteil der Person auf dem Foto (Fitness-Kontext, ${n.sex==="m"?"Mann":"Frau"}, ${n.height} cm, ${n.kg} kg, ${n.age} Jahre). Nutze sichtbare Merkmale wie Bauchmuskel-Definition, Venen, Fett an Hüfte/Bauch, Schulter- und Armdefinition und vergleiche mit gängigen visuellen Referenztabellen. Gib eine realistische Schätzung mit Spanne. Antworte NUR mit JSON: {"kfa": Zahl (beste Schätzung in %), "low": Zahl, "high": Zahl, "begruendung": "kurzer deutscher Satz"} . Wenn auf dem Foto kein Oberkörper erkennbar ist: {"kfa": null, "begruendung": "..."}`;
+    const prompt = `Schätze den Körperfettanteil der Person auf dem Foto (Fitness-Kontext, ${n.sex==="m"?"Mann":n.sex==="f"||n.sex==="w"?"Frau":"Geschlecht unbekannt"}, ${n.height} cm, ${n.kg} kg, ${n.age} Jahre). Nutze sichtbare Merkmale wie Bauchmuskel-Definition, Venen, Fett an Hüfte/Bauch, Schulter- und Armdefinition und vergleiche mit gängigen visuellen Referenztabellen. Gib eine realistische Schätzung mit Spanne. Antworte NUR mit JSON: {"kfa": Zahl (beste Schätzung in %), "low": Zahl, "high": Zahl, "begruendung": "kurzer deutscher Satz"} . Wenn auf dem Foto kein Oberkörper erkennbar ist: {"kfa": null, "begruendung": "..."}`;
     const res = await sample.json(prompt, {images:[blob], modelTier:"default"});
     if(!res || res.kfa==null || !isFinite(+res.kfa)){ modal(`<h3>Keine Schätzung möglich</h3><p>${esc((res&&res.begruendung)||"Auf dem Foto ist kein Oberkörper gut erkennbar.")} Am besten: Oberkörper frei, gutes Licht, von vorn.</p>`); return; }
     n.kfa = Math.round(+res.kfa*10)/10; n.kfaSrc="foto"; n.kfaRange = (isFinite(+res.low)&&isFinite(+res.high))? [Math.round(+res.low), Math.round(+res.high)] : null; n.kfaDate=Date.now();
@@ -4747,7 +4753,7 @@ function nuDetail(){
 function coachContext(){
   const L=[]; const f1=v=>fmtNum(Math.round(v*10)/10);
   try{ const n=NU(); const T=nuTargets(); const c=cutStats();
-    L.push(`Profil: ${n.sex==="w"?"Frau":"Mann"}${n.age?`, ${n.age} Jahre`:""}${n.height?`, ${n.height} cm`:""}${bodyAvgNow()?`, Gewicht Ø 7 Tage ${f1(bodyAvgNow())} kg`:""}${n.kfa!=null?`, Körperfett ca. ${n.kfa} %`:""}.`);
+    L.push(`Profil: ${n.sex==="f"||n.sex==="w"?"Frau":n.sex==="m"?"Mann":"Geschlecht unbekannt"}${n.age?`, ${n.age} Jahre`:""}${n.height?`, ${n.height} cm`:""}${bodyAvgNow()?`, Gewicht Ø 7 Tage ${f1(bodyAvgNow())} kg`:""}${n.kfa!=null?`, Körperfett ca. ${n.kfa} %`:""}.`);
     if(T) L.push(`Tagesziele: ${T.kcal} kcal, ${T.p} g Eiweiß, ${T.c} g Kohlenhydrate, ${T.f} g Fett.`);
     if(c && c.c) L.push(`Cut seit ${c.c.start}: Start ${f1(c.c.startKg)} kg, Ziel ${f1(c.c.targetKg)} kg, geplant ${f1(c.c.rate||n.rate||0.5)} kg/Woche.`);
   }catch(_){}
@@ -4866,7 +4872,7 @@ async function recChatSend(id){
   if(!sample){ r.chat.push({u:false,t:"Claude ist hier gerade nicht erreichbar."}); saveNutri(); recView(id); return; }
   const per=k=>Math.round((+r[k]||0)/(r.servings||1));
   try{
-    const res=await sample.json(`Du hilfst bei einem gespeicherten Rezept in einer Ernährungs-App (Kraftsportler im Cut). Rezept: "${r.name}", ergibt ${r.servings} Portion(en)${r.unit?`, 1 Portion = ${r.unit}`:""}. Gesamt: ${r.kcal} kcal, ${r.p} g E, ${r.c} g KH, ${r.f} g F; pro Portion: ${per("kcal")} kcal, ${per("p")} g E, ${per("c")} g KH, ${per("f")} g F.
+    const res=await sample.json(`Du hilfst bei einem gespeicherten Rezept in einer Ernährungs-App (Kraftsportler ${goalTxt()}). Rezept: "${r.name}", ergibt ${r.servings} Portion(en)${r.unit?`, 1 Portion = ${r.unit}`:""}. Gesamt: ${r.kcal} kcal, ${r.p} g E, ${r.c} g KH, ${r.f} g F; pro Portion: ${per("kcal")} kcal, ${per("p")} g E, ${per("c")} g KH, ${per("f")} g F.
 Zutaten:\n"""${r.ingredients||""}"""
 ${r.extra?`Aktuelle Beilage pro Portion: ${r.extra.name} (${r.extra.kcal} kcal, ${r.extra.p} g E, ${r.extra.c} g KH, ${r.extra.f} g F).`:"Noch keine Beilage hinterlegt."}
 Bisheriger Austausch: ${JSON.stringify((r.chat||[]).slice(-8,-1).map(m=>(m.u?"Nutzer: ":"Claude: ")+m.t))}
@@ -5804,7 +5810,7 @@ async function analyzeExClaude(ex, rule, key){
   const prompt = `Du bist ein evidenzbasierter Krafttrainings-Coach. Bewerte GENAU diese eine Übung und leite aus der konkreten Situation eine Gewichtsempfehlung für das nächste Training ab.
 
 Übung: ${ex.name} (${ex.equip}), Ziel ${ex.reps}${ex.repsMax?"–"+ex.repsMax:""} Wdh, ${ex.sets} Arbeitssätze, Gewichtsstufe ${STEP(ex)} kg.
-Der Nutzer trainiert jeden Satz bis zum Muskelversagen (0 RIR); Wdh-Abfall über die Sätze ist normal, der erste Satz zählt am meisten.
+${failTxt()}; Wdh-Abfall über die Sätze ist normal, der erste Satz zählt am meisten.
 Verlauf (alt → neu, nur Arbeitssätze): ${JSON.stringify(ses)}
 Regel-Vorschlag: ${JSON.stringify({action:rule.action, kg:rule.kg, reason:rule.reason})}
 
@@ -6182,6 +6188,7 @@ document.addEventListener("click", ev=>{
     case "sideAdd": sideAdd(); break;
     case "sideDel": sideDel(+b.dataset.i); break;
     case "settings": settingsModal(); break;
+    case "stFail": { const n=NU(); n.fail = b.dataset.k==="1"; saveNutri(); document.querySelectorAll('[data-act=stFail]').forEach(x=>x.classList.toggle("on", x===b)); break; }
     case "refSave": { const e=UI.foodEdit; if(!e) break; const g=id=>{ const el=$("fe_"+id); return el? el.value : ""; };
       const it={name:g("name").trim()||e.it.name||"Mahlzeit", kcal:Math.round(num(g("kcal"))||0), p:Math.round(num(g("p"))||0), c:Math.round(num(g("c"))||0), f:Math.round(num(g("f"))||0)};
       if(!it.kcal){ toast("Bitte zuerst Kalorien eintragen"); break; }
@@ -6519,6 +6526,8 @@ function settingsModal(){
     <div class="st-sw">${Object.entries(THEME_ACC).map(([k,a])=>`<button class="${t.acc===k?"on":""}" data-act="thAcc" data-k="${k}"><i style="background:${a[1]}"></i>${a[0]}</button>`).join("")}</div>
     <div class="fv-l" style="margin-top:18px">Trainingstage</div>
     <div class="st-days">${[[1,"Mo"],[2,"Di"],[3,"Mi"],[4,"Do"],[5,"Fr"],[6,"Sa"],[0,"So"]].map(([d,l])=>`<button class="${PLAN.days.includes(d)?"on":""}" data-act="stDay" data-d="${d}" aria-label="${WEEKDAYS[d]}">${l}</button>`).join("")}</div>
+    <div class="fv-l" style="margin-top:18px">Sätze</div>
+    <div class="st-seg">${[["1","Bis Muskelversagen"],["0","1–2 Wdh vorher"]].map(([k,l])=>`<button class="${(toFail()?"1":"0")===k?"on":""}" data-act="stFail" data-k="${k}">${l}</button>`).join("")}</div>
     ${(window.gymArcPush && window.gymArcPush.html()) || ""}
     <div class="fv-l" style="margin-top:18px">Daten</div>
     <div class="st-bk"><button class="m-btn" data-act="bkExport">↑ Exportieren</button><button class="m-btn" data-act="bkImport">↓ Importieren</button></div>

@@ -747,7 +747,7 @@
   function kgOn(day){ try{ var x = (S.body || []).filter(function(e){ return e.d <= day; }).sort(function(p, q){ return p.d < q.d ? 1 : -1; })[0]; return x ? x.kg : null; }catch(_){ return null; } }
   /* Zu jedem neuen Foto: Körperfett per Claude schätzen */
   async function phKfa(name, day, blob){
-    var info = ""; try{ var nu = NU(); info = (nu.sex === "w" ? "Frau" : "Mann") + (nu.height ? ", " + nu.height + " cm" : "") + (nu.age ? ", " + nu.age + " Jahre" : ""); }catch(_){}
+    var info = ""; try{ var nu = NU(); info = ((nu.sex === "f" || nu.sex === "w") ? "Frau" : nu.sex === "m" ? "Mann" : "Geschlecht unbekannt") + (nu.height ? ", " + nu.height + " cm" : "") + (nu.age ? ", " + nu.age + " Jahre" : ""); }catch(_){}
     var kg = kgOn(day);
     try{
       toast2("Körperfett wird geschätzt …");
@@ -817,7 +817,7 @@
   }
   async function phRun(){
     var L = await phList(); var a = L[0], b = L.find(function(x){ return x.path === PH.sel; }); if(!a || !b) return;
-    var info = ""; try{ var n = NU(); info = (n.sex === "w" ? "Frau" : "Mann") + (n.height ? ", " + n.height + " cm" : "") + (n.age ? ", " + n.age + " Jahre" : ""); }catch(_){}
+    var info = ""; try{ var n = NU(); info = ((n.sex === "f" || n.sex === "w") ? "Frau" : n.sex === "m" ? "Mann" : "Geschlecht unbekannt") + (n.height ? ", " + n.height + " cm" : "") + (n.age ? ", " + n.age + " Jahre" : ""); }catch(_){}
     var kgA = null, kgB = null; try{ var bl = (S.body || []); var f = function(day){ var x = bl.filter(function(e){ return e.d <= day; }).sort(function(p, q){ return p.d < q.d ? 1 : -1; })[0]; return x ? x.kg : null; }; kgA = f(a.day); kgB = f(b.day); }catch(_){}
     modal('<h3>Claude vergleicht …</h3><p>' + deDate(b.day) + ' → ' + deDate(a.day) + '</p>');
     try{

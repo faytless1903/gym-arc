@@ -180,6 +180,7 @@
   async function ask(input, opts, json){
     opts = opts || {};
     var body = { tier: opts.modelTier || "default", json: !!json };
+    if(opts.web) body.web = true;
     if(typeof input === "string") body.prompt = input; else body.messages = input;
     if(opts.images && opts.images.length) body.images = await Promise.all(opts.images.map(b64));
     for(var i = 0; i < 2; i++){

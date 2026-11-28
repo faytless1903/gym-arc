@@ -4184,6 +4184,17 @@ function findKnownFood(q){
   if(best) return best;
   const f=(NU().favs||[]).find(x=>foodNorm(x.name)===n && +x.kcal>0); return f ? {it:f, day:null} : null;
 }
+/* Restaurantketten: offizielle Nährwerte per Websuche statt Schätzung */
+const CHAINS=[[/mc ?donald|mcdonald|\bmcd\b|mcchicken|big ?mac|mcnugget|mcflurry|mcrib|mcwrap/i,"McDonald's","mcdonalds.com/de"],[/burger ?king|whopper|\bbk\b/i,"Burger King","burgerking.de"],[/\bkfc\b|kentucky/i,"KFC","kfc.de"],[/subway/i,"Subway","subway.com/de-DE"],[/starbucks/i,"Starbucks","starbucks.de"],
+  [/vapiano/i,"Vapiano","vapiano.com"],[/nordsee/i,"Nordsee","nordsee.com"],[/five ?guys/i,"Five Guys","fiveguys.de"],[/domino'?s/i,"Domino's","dominos.de"],[/pizza ?hut/i,"Pizza Hut","pizzahut.de"],[/dean ?(&|und) ?david/i,"dean&david","deananddavid.com"],
+  [/dunkin/i,"Dunkin'","dunkin.de"],[/l'?osteria/i,"L'Osteria","losteria.net"],[/backwerk/i,"BackWerk","back-werk.de"],[/hans ?im ?glück/i,"Hans im Glück","hansimglueck-burgergrill.de"],[/peter ?pane/i,"Peter Pane","peterpane.de"],[/ikea/i,"IKEA","ikea.com/de"]];
+const chainOf = q => { const c=CHAINS.find(([re])=>re.test(q)); return c ? {name:c[1], site:c[2]} : null; };
+async function chainLookup(sample, q, ch){
+  const prompt=`Der Nutzer hat bei ${ch.name} gegessen: """${q.trim()}"""
+Suche die offiziellen Nährwerte dieses Produkts von ${ch.name} Deutschland (bevorzugt die offizielle Website ${ch.site} bzw. das offizielle Nährwert-PDF; nur wenn dort nichts zu finden ist, eine andere verlässliche Quelle). Achte auf die genannte Größe/Stückzahl (z. B. 6, 9 oder 20 Nuggets; klein/mittel/groß). Mehrere Produkte (z. B. Menü mit Pommes und Getränk): alle zusammenzählen. Saucen/Dips nur, wenn genannt.
+Antworte NUR mit JSON: {"name":"kurzer Name inkl. Größe","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl,"gramm":Zahl oder null,"offiziell":true/false,"quelle":"URL der verwendeten Seite","teile":[{"name":"…","kcal":Zahl,"protein":Zahl,"kohlenhydrate":Zahl,"fett":Zahl}]}. "offiziell" nur true, wenn die Werte direkt von ${ch.name} stammen.`;
+  return await sample.json(prompt, {modelTier:"default", web:true});
+}
 async function foodTextSearch(){
   const q=($("fdQ")||{}).value||""; const meal=foodMeal;
   if(!q.trim()){ toast("Bitte eintippen, was du gegessen hast"); return; }
@@ -4194,6 +4205,19 @@ async function foodTextSearch(){
     foodEditor(copy, meal, -1, `Werte von deinem Eintrag ${dt?"vom "+dt:"aus den Favoriten"} übernommen – ohne Claude. Für eine andere Menge die Menge anpassen oder die Beschreibung mit Mengen eintippen.`); return; }
   let sample=null; try{ sample = window.claude && claude.use ? await claude.use("sample") : null; }catch(_){}
   if(!sample){ foodEditor({name:q.trim().slice(0,60), kcal:"", p:"", c:"", f:""}, meal, -1, "Die KI-Suche ist hier nicht verfügbar – trag die Werte bitte selbst ein."); return; }
+  const ch=chainOf(q);
+  if(ch){
+    modal(`<h3>Offizielle Nährwerte von ${esc(ch.name)} …</h3><p>${esc(q)}</p><p class="nu-hint">Claude sucht auf der Website von ${esc(ch.name)}.</p>`);
+    try{ const r=await chainLookup(sample, q, ch);
+      if(r && isFinite(+r.kcal) && +r.kcal>0){
+        const parts=(Array.isArray(r.teile)&&r.teile.length>1) ? r.teile.map(t=>`${t.name} (${Math.round(+t.kcal||0)} kcal)`).join(" · ") : "";
+        let host=""; try{ host=new URL(r.quelle).hostname.replace(/^www\./,""); }catch(_){}
+        foodEditor({name:String(r.name||q).slice(0,60), kcal:Math.round(+r.kcal), p:Math.round(+r.protein||0), c:Math.round(+r.kohlenhydrate||0), f:Math.round(+r.fett||0), ...(parts?{parts:parts.slice(0,300)}:{}), ai:true, src:(r.offiziell&&r.quelle)||null}, meal, -1,
+          r.offiziell ? `Offizielle Angaben von ${ch.name}${host?" ("+host+")":""}.` : `Keine offiziellen Angaben gefunden – Werte aus ${host||"einer anderen Quelle"}, bitte prüfen.`);
+        return; }
+    }catch(err){ if(err && err.code==="not_granted"){ foodEditor({name:q.trim().slice(0,60), kcal:"", p:"", c:"", f:""}, meal, -1, "Die KI-Abfrage wurde nicht erlaubt – trag die Werte selbst ein."); return; } }
+    // Websuche ging nicht → normale Schätzung unten
+  }
   modal(`<h3>Nährwerte werden ermittelt …</h3><p>${esc(q)}</p>`);
   try{
     const prompt = `Der Nutzer beschreibt EIN Gericht oder Getränk, das als EIN Eintrag gespeichert wird – evtl. mit Zutaten, Mengen und Gesamtmenge:\n"""${q.trim()}"""\n
@@ -5376,7 +5400,7 @@ function foodEditor(it, meal, idx, msg){
   UI.foodEdit={it, meal, idx};
   const f=(k,l,u)=>`<label class="nu-f"><span>${l}</span><div><input inputmode="decimal" id="fe_${k}" value="${it[k]??""}"><em>${u}</em></div></label>`;
   modal(`<h3>${idx<0?"Mahlzeit hinzufügen":"Mahlzeit bearbeiten"}</h3>
-    ${msg?`<p class="nu-hint ${/übernommen/.test(msg)?"":"warn"}">${esc(msg)}</p>`:""}
+    ${msg?`<p class="nu-hint ${/übernommen|^Offizielle/.test(msg)?"":"warn"}">${esc(msg)}</p>`:""}
     ${it.verified?`<div class="fd-ok">✓ Geprüfte Herstellerangaben</div>`:""}
     ${it.parts && !it.comp?`<p>${esc(it.parts)}</p>`:""}
     <label class="nu-f" style="margin-bottom:10px"><span>Name</span><div><input id="fe_name" value="${esc(it.name||"")}" style="font-size:18px"></div></label>
@@ -5385,7 +5409,7 @@ function foodEditor(it, meal, idx, msg){
     <div class="nu-grid" ${it.comp?'style="display:none"':""}>${f("kcal","Kalorien","kcal")}${f("p","Eiweiß","g")}${f("c","Kohlenhydrate","g")}${f("f","Fett","g")}</div>
     ${sidesBox(it)}
     ${it.ean&&!it.comp?`<p class="nu-hint">${it.eanOwn?"Deine korrigierten Werte für diesen Barcode.":"Werte aus Open Food Facts (Community-Daten, teils veraltet) – kurz mit der Packung vergleichen. Wenn du sie änderst, merkt sich die App das für diesen Barcode."}</p>`:""}
-    ${it.ai&&!it.label&&!it.comp?`<p class="nu-hint">Schätzung von Claude – bitte prüfen und bei Bedarf anpassen.</p>`:""}${it.label?`<div class="fd-ok">✓ Von der Nährwerttabelle abgelesen</div>`:""}
+    ${it.ai&&!it.label&&!it.comp&&!it.src?`<p class="nu-hint">Schätzung von Claude – bitte prüfen und bei Bedarf anpassen.</p>`:""}${it.src?`<div class="fd-ok">✓ Werte per Websuche übernommen${(()=>{ try{ return " – "+new URL(it.src).hostname.replace(/^www\./,""); }catch(_){ return ""; } })()}</div>`:""}${it.label?`<div class="fd-ok">✓ Von der Nährwerttabelle abgelesen</div>`:""}
     <button class="m-btn pri" data-act="foodSave">${idx<0?"Hinzufügen":"Speichern"}</button>
     <div class="fe-save2"><button class="m-btn" data-act="favToggle">${isFav(it)?"★ Favorit":"☆ Favorit"}</button></div>
 

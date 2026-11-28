@@ -17,11 +17,12 @@ const PRICES: Record<string, { in: number; out: number; inBig?: number; outBig?:
   "claude-sonnet-5-5": { in: 2, out: 10 },
   "claude-haiku-5-5": { in: 0.10, out: 0.50, inBig: 0.50, outBig: 2.50 }, // über 100.000 Eingabe-Tokens teurer
 };
-function costUSD(model: string, u: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }) {
+function costUSD(model: string, u: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number; web_search_requests?: number }) {
   const p = PRICES[model] || PRICES["claude-sonnet-5-5"];
   const inp = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
   const big = inp > 100000 && p.inBig;
-  return (inp * (big ? p.inBig! : p.in) + (u.output_tokens || 0) * (big ? p.outBig! : p.out)) / 1e6;
+  // Websuche: 10 $ pro 1.000 Suchen (platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)
+  return (inp * (big ? p.inBig! : p.in) + (u.output_tokens || 0) * (big ? p.outBig! : p.out)) / 1e6 + (u.web_search_requests || 0) * 0.01;
 }
 // Wofür war die Anfrage? (für die Liste in den Einstellungen – erkannt am Anfang des Auftrags)
 const WHAT: [RegExp, string][] = [
@@ -29,6 +30,7 @@ const WHAT: [RegExp, string][] = [
   [/Fortschrittsfotos/, "Fotovergleich"],
   [/Körperfettanteil/, "Körperfett per Foto"],
   [/Foto einer Mahlzeit/, "Essen per Foto"],
+  [/offiziellen Nährwerte/, "Essen per Beschreibung (Websuche)"],
   [/beschreibt EIN Gericht/, "Essen per Beschreibung"],
   [/Ordne jedem Bestandteil|Bundeslebensmittelschlüssel/, "Nährwerte zuordnen (BLS)"],
   [/Zutaten eines Rezepts/, "Rezept-Zutaten zuordnen"],
@@ -132,25 +134,38 @@ Deno.serve(async (req) => {
       ? (Deno.env.get("MODEL_QUICK") || "claude-haiku-5-5")
       : (Deno.env.get("MODEL_DEFAULT") || "claude-sonnet-5-5");
 
-    // 3) Claude aufrufen
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") || "",
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ model, max_tokens: 4096, system: b.json ? SYS_JSON : SYS_TEXT, messages }),
-    });
-    const d = await r.json();
-    if (!r.ok) {
-      const code = r.status === 429 || r.status === 529 ? "rate_limited" : "unavailable";
-      return json({ code, message: (d && d.error && d.error.message) || "Claude-Fehler " + r.status }, r.status === 429 ? 429 : 502);
+    // 3) Claude aufrufen (optional mit Websuche, z. B. für offizielle Nährwerte von Restaurantketten)
+    const tools = b.web ? [{ type: "web_search_20250305", name: "web_search", max_uses: 3, user_location: { type: "approximate", country: "DE", timezone: "Europe/Berlin" } }] : undefined;
+    const usage: Record<string, number> = {};
+    let d: any = null;
+    for (let round = 0; round < 3; round++) {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": Deno.env.get("ANTHROPIC_API_KEY") || "",
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model, max_tokens: 4096, system: b.json ? SYS_JSON : SYS_TEXT, messages, ...(tools ? { tools } : {}) }),
+      });
+      d = await r.json();
+      if (!r.ok) {
+        const code = r.status === 429 || r.status === 529 ? "rate_limited" : "unavailable";
+        return json({ code, message: (d && d.error && d.error.message) || "Claude-Fehler " + r.status }, r.status === 429 ? 429 : 502);
+      }
+      const u0 = d.usage || {};
+      for (const k of ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"]) usage[k] = (usage[k] || 0) + (+u0[k] || 0);
+      usage.web_search_requests = (usage.web_search_requests || 0) + (+(u0.server_tool_use && u0.server_tool_use.web_search_requests) || 0);
+      if (d.stop_reason !== "pause_turn") break;
+      messages = [...messages, { role: "assistant", content: d.content }];   // lange Suche: unverändert zurückschicken und fortsetzen
     }
     const first = Array.isArray(b.messages) && b.messages.length ? String(b.messages[0].content || "") : String(b.prompt || "");
-    if (d.usage) await logUsage(user.id, model, d.usage, whatOf(first.slice(0, 3000), images.length));
-    const text = (d.content || []).filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("");
-    return json({ text, truncated: d.stop_reason === "max_tokens", model });
+    await logUsage(user.id, model, usage, whatOf(first.slice(0, 3000), images.length));
+    const blocks = (d.content || []) as { type: string; text?: string }[];
+    // bei Websuche nur den Text nach dem letzten Suchergebnis (die eigentliche Antwort)
+    let from = 0; blocks.forEach((c, i) => { if (c.type === "web_search_tool_result") from = i + 1; });
+    const text = blocks.slice(from).filter((c) => c.type === "text").map((c) => c.text || "").join("");
+    return json({ text, truncated: d.stop_reason === "max_tokens", model, searches: usage.web_search_requests || 0 });
   } catch (e) {
     return json({ code: "unavailable", message: String(e) }, 500);
   }
